@@ -2,10 +2,33 @@
 Routines regarding gaussian cube files
 """
 
+import io
+import re
+
 import ase
 import numpy as np
 
 ANG_TO_BOHR = 1.8897259886
+
+
+def remove_useless_zeros(s):
+    # Pattern to identify unnecessary zeros in a number
+    # This pattern looks for numbers that have a decimal point followed by any number of zeros, optionally ending with more digits
+    # It captures the number part before the decimal point and the non-zero digits after the decimal point (if any)
+    pattern = r"(\d+)\.0+([1-9]*)"
+
+    # Replacement function
+    # If there are non-zero digits after the decimal point, keep one trailing zero (for numbers like 1.0, 2.0, etc.)
+    # Otherwise, remove the decimal part entirely
+    def replacer(match):
+        if match.group(2):  # If there are digits after the zeros
+            return match.group(1) + "." + match.group(2)  # Keep the non-zero digits
+        else:
+            return match.group(1)  # Keep only the integer part
+
+    # Use re.sub() to replace the matches of the pattern in the input string with the output of the replacer function
+
+    return re.sub(pattern, replacer, s)
 
 
 class Cube:
@@ -25,7 +48,6 @@ class Cube:
         cell_n=None,
         data=None,
     ):
-        # pylint: disable=too-many-arguments
         """
         cell in [au] and (3x3)
         origin in [au]
@@ -43,7 +65,6 @@ class Cube:
 
     @classmethod
     def from_file_handle(cls, filehandle, read_data=True):
-        # pylint: disable=too-many-locals
         f = filehandle
         c = cls()
         c.title = f.readline().rstrip()
@@ -77,7 +98,9 @@ class Cube:
 
         positions /= ANG_TO_BOHR  # convert from bohr to ang
 
-        c.ase_atoms = ase.Atoms(numbers=numbers, positions=positions)
+        c.ase_atoms = ase.Atoms(
+            numbers=numbers, positions=positions, cell=c.cell / ANG_TO_BOHR
+        )
 
         if read_data:
             # Option 1: less memory usage but might be slower
@@ -104,7 +127,7 @@ class Cube:
             c = cls.from_file_handle(f, read_data=read_data)
         return c
 
-    def write_cube_file(self, filename):
+    def write_cube_file(self, filename, low_precision=False):
 
         natoms = len(self.ase_atoms)
 
@@ -144,9 +167,32 @@ class Cube:
                     % (numbers[i], 0.0, at_x, at_y, at_z)
                 )
 
-        self.data.tofile(f, sep="\n", format="%12.6e")
+        if low_precision:
+            string_io = io.StringIO()
+            np.savetxt(string_io, self.data.flatten(), fmt="%.3f")
+            result_string = remove_useless_zeros(string_io.getvalue())
+            f.write(result_string)
+        else:
+            self.data.tofile(f, sep="\n", format="%12.6e")
 
         f.close()
+
+    def reduce_data_density(self):
+        """Reduces the data density"""
+        # We should have ~ 1 point per Bohr
+        slicer = np.round(
+            self.data.shape / np.linalg.norm(self.ase_atoms.cell, axis=1) / 2
+        ).astype(int)
+        self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+
+    def rescale_data(self):
+        """Rescales the data to be between -1 and 1"""
+        scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
+        self.data /= scaling_factor
+        self.data = np.round(self.data, decimals=3)
+
+        # Convert -0 to 0
+        self.data[self.data == 0] = 0
 
     def swapaxes(self, ax1, ax2):
 
