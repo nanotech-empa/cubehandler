@@ -58,6 +58,7 @@ class Cube:
         self.origin = origin
         self.cell = cell
         self.data = data
+        self.scaling_factor = 1.0
         if data is not None:
             self.cell_n = data.shape
         else:
@@ -139,9 +140,9 @@ class Cube:
             f.write(self.title + "\n")
 
         if self.comment is None:
-            f.write("cube\n")
+            f.write(f"Scaling factor: {self.scaling_factor}\n")
         else:
-            f.write(self.comment + "\n")
+            f.write(self.comment + f" Scaling factor: {self.scaling_factor}" + "\n")
 
         dv_br = self.cell / self.data.shape
 
@@ -177,18 +178,23 @@ class Cube:
 
         f.close()
 
-    def reduce_data_density(self):
+    def reduce_data_density(self, points_per_angstrom=2):
         """Reduces the data density"""
         # We should have ~ 1 point per Bohr
         slicer = np.round(
-            self.data.shape / np.linalg.norm(self.ase_atoms.cell, axis=1) / 2
+            self.data.shape
+            / np.linalg.norm(self.ase_atoms.cell, axis=1)
+            / points_per_angstrom
         ).astype(int)
-        self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+        try:
+            self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+        except ValueError:
+            print("Warning: Could not reduce data density")
 
     def rescale_data(self):
         """Rescales the data to be between -1 and 1"""
-        scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
-        self.data /= scaling_factor
+        self.scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
+        self.data /= self.scaling_factor
         self.data = np.round(self.data, decimals=3)
 
         # Convert -0 to 0
