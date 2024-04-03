@@ -1,5 +1,7 @@
 import os
+
 import numpy as np
+
 from cubehandler import Cube
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
