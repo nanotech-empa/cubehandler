@@ -1,6 +1,7 @@
-import os
 from pathlib import Path
+
 import numpy as np
+
 from cubehandler import Cube
 
 this_file_path = Path(__file__)
