@@ -13,7 +13,7 @@ ANG_TO_BOHR = 1.8897259886
 
 def remove_trailing_zeros(number):
     # Format the number using fixed-point notation with high precision
-    number_str = "{:.11f}".format(number)
+    number_str = f"{number:.11f}"
 
     # Remove trailing zeros and a possible trailing decimal point
     number_str = number_str.rstrip("0").rstrip(".")
@@ -189,7 +189,7 @@ class Cube:
 
         if low_precision:
             string_io = io.StringIO()
-            format_string = "%.{}f".format(self.low_precision_decimals)
+            format_string = f"%.{self.low_precision_decimals}f"
             np.savetxt(string_io, self.data.flatten(), fmt=format_string)
             result_string = remove_useless_zeros(string_io.getvalue())
             f.write(result_string)
