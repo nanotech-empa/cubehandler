@@ -20,6 +20,7 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "ase",
+    "click",
 ]
 
 [project.optional-dependencies]
