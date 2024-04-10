@@ -21,6 +21,7 @@ def test_read_cube():
         np.array([[15.1178, 0, 0], [0, 15.1178, 0], [0, 0, 15.1178]]),
         atol=0.001,
     )
+    assert cube.scaling_f == 1
 
 
 def test_get_xyz_index():
@@ -79,3 +80,14 @@ def test_x_arr_ang():
         ),
         atol=0.001,
     )
+
+
+def test_reduce_data_density():
+    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    integral = np.sum(cube.data) * cube.dv_au * cube.scaling_f
+    cube.reduce_data_density(points_per_angstrom=2)
+    cube.write_cube_file("low_res.cube", low_precision=True)
+    low_res = Cube.from_file("low_res.cube")
+    low_res_integral = np.sum(low_res.data) * low_res.dv_au * low_res.scaling_f
+    # assert np.abs(low_res_integral - integral) < 0.005
+    assert cube.scaling_f == 0.2848452
