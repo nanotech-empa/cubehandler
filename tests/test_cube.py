@@ -30,10 +30,10 @@ def test_get_xyz_index():
     assert cube.get_z_index(1) == 4
 
 
-def test_dv():
+def test_dcell():
     cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
     assert np.allclose(
-        cube.dv_ang, np.array([[0.25, 0, 0], [0, 0.25, 0], [0, 0, 0.25]]), atol=0.001
+        cube.dcell_ang, np.array([[0.25, 0, 0], [0, 0.25, 0], [0, 0, 0.25]]), atol=0.001
     )
 
 

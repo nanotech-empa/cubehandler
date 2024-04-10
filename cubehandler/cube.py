@@ -2,10 +2,37 @@
 Routines regarding gaussian cube files
 """
 
+import io
+import re
+
 import ase
 import numpy as np
 
 ANG_TO_BOHR = 1.8897259886
+
+
+def remove_trailing_zeros(number):
+    # Format the number using fixed-point notation with high precision
+    number_str = f"{number:.11f}"
+
+    # Remove trailing zeros and a possible trailing decimal point
+    number_str = number_str.rstrip("0").rstrip(".")
+
+    # Return the cleaned-up number as a string to avoid automatic conversion to scientific notation
+    return number_str
+
+
+def remove_useless_zeros(input_string):
+    # Regular expression to match floating-point numbers
+    float_pattern = re.compile(r"\b\d+\.\d+\b")
+
+    def replace_float(match):
+        float_str = match.group(0)
+        cleaned_float_str = remove_trailing_zeros(float(float_str))
+        return cleaned_float_str
+
+    # Replace all occurrences of floating-point numbers in the input string
+    return float_pattern.sub(replace_float, input_string)
 
 
 class Cube:
@@ -14,18 +41,22 @@ class Cube:
     """
 
     default_origin = np.array([0.0, 0.0, 0.0])
+    default_scaling_factor = 1.0
+    default_comment = "Cubehandler"
+    default_low_precision_decimals = 3
 
     def __init__(
         self,
         title=None,
-        comment=None,
+        comment=default_comment,
         ase_atoms=None,
         origin=default_origin,
+        scaling_factor=default_scaling_factor,
+        low_precision_decimals=default_low_precision_decimals,
         cell=None,
         cell_n=None,
         data=None,
     ):
-        # pylint: disable=too-many-arguments
         """
         cell in [au] and (3x3)
         origin in [au]
@@ -34,8 +65,10 @@ class Cube:
         self.comment = comment
         self.ase_atoms = ase_atoms
         self.origin = origin
+        self.scaling_factor = scaling_factor
         self.cell = cell
         self.data = data
+        self.low_precision_decimals = low_precision_decimals
         if data is not None:
             self.cell_n = data.shape
         else:
@@ -43,11 +76,12 @@ class Cube:
 
     @classmethod
     def from_file_handle(cls, filehandle, read_data=True):
-        # pylint: disable=too-many-locals
         f = filehandle
         c = cls()
         c.title = f.readline().rstrip()
         c.comment = f.readline().rstrip()
+        if "Scaling factor:" in c.comment:
+            c.scaling_factor = float(c.comment.split()[-1])
 
         line = f.readline().split()
         natoms = int(line[0])
@@ -77,7 +111,9 @@ class Cube:
 
         positions /= ANG_TO_BOHR  # convert from bohr to ang
 
-        c.ase_atoms = ase.Atoms(numbers=numbers, positions=positions)
+        c.ase_atoms = ase.Atoms(
+            numbers=numbers, positions=positions, cell=c.cell / ANG_TO_BOHR
+        )
 
         if read_data:
             # Option 1: less memory usage but might be slower
@@ -104,9 +140,11 @@ class Cube:
             c = cls.from_file_handle(f, read_data=read_data)
         return c
 
-    def write_cube_file(self, filename):
+    def write_cube_file(self, filename, low_precision=False):
 
         natoms = len(self.ase_atoms)
+        if low_precision:
+            self.rescale_data()
 
         f = open(filename, "w")
 
@@ -115,10 +153,15 @@ class Cube:
         else:
             f.write(self.title + "\n")
 
-        if self.comment is None:
-            f.write("cube\n")
+        if "Scaling factor:" in self.comment:
+            self.comment = re.sub(
+                r"Scaling factor: \d+\.\d+",
+                f"Scaling factor: {self.scaling_factor}",
+                self.comment,
+            )
         else:
-            f.write(self.comment + "\n")
+            self.comment += f" Scaling factor: {self.scaling_factor}"
+        f.write(self.comment + "\n")
 
         dv_br = self.cell / self.data.shape
 
@@ -144,9 +187,37 @@ class Cube:
                     % (numbers[i], 0.0, at_x, at_y, at_z)
                 )
 
-        self.data.tofile(f, sep="\n", format="%12.6e")
+        if low_precision:
+            string_io = io.StringIO()
+            format_string = f"%.{self.low_precision_decimals}f"
+            np.savetxt(string_io, self.data.flatten(), fmt=format_string)
+            result_string = remove_useless_zeros(string_io.getvalue())
+            f.write(result_string)
+        else:
+            self.data.tofile(f, sep="\n", format="%12.6e")
 
         f.close()
+
+    def reduce_data_density(self, points_per_angstrom=2):
+        """Reduces the data density"""
+        # We should have ~ 1 point per Bohr
+        slicer = np.round(
+            1.0 / (points_per_angstrom * np.linalg.norm(self.dcell, axis=1))
+        ).astype(int)
+        try:
+            self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+        except ValueError:
+            print("Warning: Could not reduce data density")
+
+    def rescale_data(self):
+        """Rescales the data to be between -1 and 1"""
+        self.scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
+        print("check", self.scaling_factor, abs(self.data.min()), abs(self.data.max()))
+        self.data /= self.scaling_factor
+        self.data = np.round(self.data, decimals=self.low_precision_decimals)
+
+        # Convert -0 to 0
+        self.data[self.data == 0] = 0
 
     def swapaxes(self, ax1, ax2):
 
@@ -219,17 +290,39 @@ class Cube:
         )
 
     @property
+    def scaling_f(self):
+        scaling_f = self.scaling_factor
+        if "Scaling_factor" in self.comment:
+            scaling_f = float(self.comment.split()[-1])
+        return scaling_f
+
+    @property
     def dv(self):
         """in [ang]"""
-        return self.cell / self.cell_n / ANG_TO_BOHR
+        return self.dv_ang
 
     @property
     def dv_ang(self):
         """in [ang]"""
-        return self.cell / self.cell_n / ANG_TO_BOHR
+        return self.ase_atoms.get_volume() / self.data.size
 
     @property
     def dv_au(self):
+        """in [au]"""
+        return ANG_TO_BOHR**3 * self.dv_ang
+
+    @property
+    def dcell(self):
+        """in [ang]"""
+        return self.dcell_ang
+
+    @property
+    def dcell_ang(self):
+        """in [ang]"""
+        return self.dcell_au / ANG_TO_BOHR
+
+    @property
+    def dcell_au(self):
         """in [au]"""
         return self.cell / self.cell_n
 
@@ -238,8 +331,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[0],
-            self.origin[0] + (self.cell_n[0] - 0.5) * self.dv_au[0, 0],
-            self.dv_au[0, 0],
+            self.origin[0] + (self.cell_n[0] - 0.5) * self.dcell_au[0, 0],
+            self.dcell_au[0, 0],
         )
 
     @property
@@ -247,8 +340,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[1],
-            self.origin[1] + (self.cell_n[1] - 0.5) * self.dv_au[1, 1],
-            self.dv_au[1, 1],
+            self.origin[1] + (self.cell_n[1] - 0.5) * self.dcell_au[1, 1],
+            self.dcell_au[1, 1],
         )
 
     @property
@@ -256,8 +349,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[2],
-            self.origin[2] + (self.cell_n[2] - 0.5) * self.dv_au[2, 2],
-            self.dv_au[2, 2],
+            self.origin[2] + (self.cell_n[2] - 0.5) * self.dcell_au[2, 2],
+            self.dcell_au[2, 2],
         )
 
     @property
