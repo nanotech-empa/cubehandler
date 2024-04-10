@@ -202,7 +202,7 @@ class Cube:
         """Reduces the data density"""
         # We should have ~ 1 point per Bohr
         slicer = np.round(
-            1.0 / (points_per_angstrom * np.linalg.norm(self.dv, axis=1))
+            1.0 / (points_per_angstrom * np.linalg.norm(self.dcell, axis=1))
         ).astype(int)
         try:
             self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
@@ -297,32 +297,32 @@ class Cube:
         return scaling_f
 
     @property
-    def dV(self):
-        """in [ang]"""
-        return self.ase_atoms.get_volume() / self.data.size
-
-    @property
-    def dV_ang(self):
-        """in [ang]"""
-        return self.ase_atoms.get_volume() / self.data.size
-
-    @property
-    def dV_au(self):
-        """in [au]"""
-        return ANG_TO_BOHR**3 * self.ase_atoms.get_volume() / self.data.size
-
-    @property
     def dv(self):
         """in [ang]"""
-        return self.cell / self.cell_n / ANG_TO_BOHR
+        return self.dv_ang
 
     @property
     def dv_ang(self):
         """in [ang]"""
-        return self.cell / self.cell_n / ANG_TO_BOHR
+        return self.ase_atoms.get_volume() / self.data.size
 
     @property
     def dv_au(self):
+        """in [au]"""
+        return ANG_TO_BOHR**3 * self.dv_ang
+
+    @property
+    def dcell(self):
+        """in [ang]"""
+        return self.dcell_ang
+
+    @property
+    def dcell_ang(self):
+        """in [ang]"""
+        return self.dcell_au / ANG_TO_BOHR
+
+    @property
+    def dcell_au(self):
         """in [au]"""
         return self.cell / self.cell_n
 
@@ -331,8 +331,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[0],
-            self.origin[0] + (self.cell_n[0] - 0.5) * self.dv_au[0, 0],
-            self.dv_au[0, 0],
+            self.origin[0] + (self.cell_n[0] - 0.5) * self.dcell_au[0, 0],
+            self.dcell_au[0, 0],
         )
 
     @property
@@ -340,8 +340,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[1],
-            self.origin[1] + (self.cell_n[1] - 0.5) * self.dv_au[1, 1],
-            self.dv_au[1, 1],
+            self.origin[1] + (self.cell_n[1] - 0.5) * self.dcell_au[1, 1],
+            self.dcell_au[1, 1],
         )
 
     @property
@@ -349,8 +349,8 @@ class Cube:
         """in [au]"""
         return np.arange(
             self.origin[2],
-            self.origin[2] + (self.cell_n[2] - 0.5) * self.dv_au[2, 2],
-            self.dv_au[2, 2],
+            self.origin[2] + (self.cell_n[2] - 0.5) * self.dcell_au[2, 2],
+            self.dcell_au[2, 2],
         )
 
     @property
