@@ -142,9 +142,7 @@ class Cube:
 
     @classmethod
     def from_content(cls, content, read_data=True):
-        with open(io.StringIO(content)) as f:
-            c = cls.from_file_handle(f, read_data=read_data)
-        return c
+        return cls.from_file_handle(io.StringIO(content), read_data=read_data)
 
     def write_cube_file(self, filename, low_precision=False):
 
