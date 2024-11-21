@@ -140,6 +140,10 @@ class Cube:
             c = cls.from_file_handle(f, read_data=read_data)
         return c
 
+    @classmethod
+    def from_content(cls, content, read_data=True):
+        return cls.from_file_handle(io.StringIO(content), read_data=read_data)
+
     def write_cube_file(self, filename, low_precision=False):
 
         natoms = len(self.ase_atoms)
