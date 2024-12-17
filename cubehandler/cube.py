@@ -75,7 +75,7 @@ class Cube:
             self.cell_n = cell_n
 
     @classmethod
-    def from_file_handle(cls, filehandle, read_data=True):
+    def from_file_handle(cls, filehandle, read_data=True, apply_scaling=True):
         f = filehandle
         c = cls()
         c.title = f.readline().rstrip()
@@ -131,18 +131,20 @@ class Cube:
             # data = np.array(f.read().split(), dtype=float)
 
             c.data = c.data.reshape(c.cell_n)
+            if apply_scaling:
+                c.data *= c.scaling_factor
 
         return c
 
     @classmethod
-    def from_file(cls, filepath, read_data=True):
+    def from_file(cls, filepath, read_data=True, apply_scaling=True):
         with open(filepath) as f:
-            c = cls.from_file_handle(f, read_data=read_data)
+            c = cls.from_file_handle(f, read_data=read_data, apply_scaling=apply_scaling)
         return c
 
     @classmethod
-    def from_content(cls, content, read_data=True):
-        return cls.from_file_handle(io.StringIO(content), read_data=read_data)
+    def from_content(cls, content, read_data=True, apply_scaling=True):
+        return cls.from_file_handle(io.StringIO(content), read_data=read_data, apply_scaling=apply_scaling)
 
     def write_cube_file(self, filename, low_precision=False):
 
