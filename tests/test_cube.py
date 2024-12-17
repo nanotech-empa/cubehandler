@@ -88,6 +88,6 @@ def test_reduce_data_density():
     cube.reduce_data_density(points_per_angstrom=2)
     cube.write_cube_file("low_res.cube", low_precision=True)
     low_res = Cube.from_file("low_res.cube")
-    low_res_integral = np.sum(low_res.data**2) * low_res.dv_au * low_res.scaling_f**2
+    low_res_integral = np.sum(low_res.data**2) * low_res.dv_au
     assert np.abs(low_res_integral - integral) < 0.01
     assert cube.scaling_f == 0.2848452
