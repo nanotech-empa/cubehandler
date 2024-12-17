@@ -22,7 +22,7 @@ def shrink(input_path, output_path, prefix):
     def run_reduction(inp, out):
         cube = Cube.from_file(inp)
         cube.reduce_data_density(points_per_angstrom=2)
-        cube.rescale_data()
+        # cube.rescale_data() # Rescaling happens below when low_precision is True
         cube.write_cube_file(out, low_precision=True)
 
     if inp.is_file():
