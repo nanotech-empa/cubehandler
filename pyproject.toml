@@ -10,7 +10,6 @@ name = "cubehandler"
 dynamic = ["version", "description"]
 readme = "README.md"
 # license = {file = 'LICENSE.txt'}
-
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
