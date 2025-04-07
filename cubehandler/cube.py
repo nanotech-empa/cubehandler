@@ -151,7 +151,6 @@ class Cube:
         )
 
     def write_cube_file(self, filename, low_precision=False):
-
         natoms = len(self.ase_atoms)
         if low_precision:
             self.rescale_data()
@@ -187,7 +186,6 @@ class Cube:
             )
 
         if natoms > 0:
-
             positions = self.ase_atoms.positions * ANG_TO_BOHR
             numbers = self.ase_atoms.get_atomic_numbers()
             for i in range(natoms):
@@ -269,7 +267,6 @@ class Cube:
         self.data[self.data == 0] = 0
 
     def swapaxes(self, ax1, ax2):
-
         p = self.ase_atoms.positions
         p[:, ax1], p[:, ax2] = p[:, ax2], p[:, ax1].copy()
 
