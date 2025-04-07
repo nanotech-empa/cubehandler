@@ -15,8 +15,17 @@ from ...cube import Cube
     "output_path", type=click.Path(file_okay=True, dir_okay=True), required=True
 )
 @click.option("-p", "--prefix", default="reduced_")
-@click.option("--method", default="skimage")
-def shrink(input_path, output_path, prefix, method="default"):
+@click.option(
+    "--method",
+    default="default",
+    help="Method to use for data reduction. Available methods are: slicing, skimiage.",
+)
+@click.option(
+    "--low-precision/--no-low-precision",
+    default=True,
+    help="Use low precision for the output cube.",
+)
+def shrink(input_path, output_path, prefix, method="default", low_precision=True):
     inp = Path(input_path)
     out = Path(output_path)
 
@@ -26,11 +35,11 @@ def shrink(input_path, output_path, prefix, method="default"):
             case "skimage":
                 cube.reduce_data_density_skimage()
             case "default":
-                cube.reduce_data_density()
+                cube.reduce_data_density_slicing()
             case _:
                 raise ValueError(f"Unknown method: {method}")
 
-        cube.write_cube_file(out, low_precision=True)
+        cube.write_cube_file(out, low_precision=low_precision)
 
     if inp.is_file():
         run_reduction(inp, out)

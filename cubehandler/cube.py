@@ -206,7 +206,7 @@ class Cube:
 
         f.close()
 
-    def reduce_data_density(self, points_per_angstrom=2):
+    def reduce_data_density_slicing(self, points_per_angstrom=2):
         """Reduces the data density"""
         # We should have ~ 1 point per Bohr
         slicer = np.round(
@@ -251,9 +251,6 @@ class Cube:
             return best_factor
 
         scaling_factor = optimal_scaling_factor(self.data)
-        print("Scaling factor:", scaling_factor)
-        print("Data shape before:", self.data.shape)
-        print("Data shape type:", type(self.data.shape))
         new_shape = tuple(int(dim * scaling_factor) for dim in self.data.shape)
         self.data = resize(self.data, new_shape, anti_aliasing=True)
 
