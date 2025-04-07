@@ -9,7 +9,7 @@ name = "cubehandler"
 name = "cubehandler"
 dynamic = ["version", "description"]
 readme = "README.md"
-license = {file = 'LICENSE.txt'}
+# license = {file = 'LICENSE.txt'}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
@@ -17,7 +17,7 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "ase",
     "click",
