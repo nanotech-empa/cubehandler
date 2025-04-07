@@ -1,7 +1,7 @@
 import click
 
 from ..version import __version__
-from .commands import shrink
+from .commands import render, shrink
 
 
 @click.group(help="Cubehandler: a tool to handle cube files.")
@@ -13,3 +13,4 @@ def cli():
 
 
 cli.add_command(shrink.shrink)
+cli.add_command(render.render)

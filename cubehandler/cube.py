@@ -219,6 +219,66 @@ class Cube:
         except ValueError:
             print("Warning: Could not reduce data density")
 
+    def render(self, settings=None):
+        """Renders the cube file"""
+        import fresnel
+        import PIL
+        from ase import data
+        from ase.data import colors
+
+        scene = fresnel.Scene()
+
+        atms = self.ase_atoms
+
+        # Draw atoms
+        geometry = fresnel.geometry.Sphere(scene, N=len(atms), radius=1.0)
+        geometry.position[:] = self.ase_atoms.positions
+        geometry.radius[:] = data.covalent_radii[atms.get_atomic_numbers()] * 0.8
+        geometry.material.primitive_color_mix = 1.0
+        geometry.color[:] = fresnel.color.linear(
+            colors.cpk_colors[atms.get_atomic_numbers()]
+        )
+
+        # Draw bonds
+        points, _ = self._compute_bonds(self.ase_atoms)
+
+        geometry = fresnel.geometry.Cylinder(scene, N=len(points))
+        geometry.points[:] = points
+        geometry.radius[:] = 0.1
+
+        scene.camera = fresnel.camera.Orthographic.fit(scene)
+        fresnel.preview(scene)
+        out = fresnel.preview(scene)
+        image = PIL.Image.fromarray(out[:], mode="RGBA")
+        image.save("cube_image.png")
+
+    def _compute_bonds(self, structure):
+        """Create an list of bonds for the structure."""
+
+        import ase.neighborlist
+        from ase.data import colors
+
+        if len(structure) <= 1:
+            return []
+
+        # The value 1.09 is chosen based on our experience. It is a good compromise between showing too many bonds
+        # and not showing bonds that should be there.
+        cutoff = ase.neighborlist.natural_cutoffs(structure, mult=1.09)
+
+        ii, bond_vectors = ase.neighborlist.neighbor_list(
+            "iD", structure, cutoff, self_interaction=False
+        )
+        # bond start position
+        v1 = structure.positions[ii]
+        # middle position
+        v2 = v1 + bond_vectors * 0.5
+        points = np.stack((v1, v2), axis=1)
+
+        # Choose the correct way for computing the cylinder.
+        numbers = structure.get_atomic_numbers()
+
+        return points, colors.cpk_colors[numbers[ii]]
+
     def rescale_data(self):
         """Rescales the data to be between -1 and 1"""
         self.scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
