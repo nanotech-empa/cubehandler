@@ -82,10 +82,10 @@ def test_x_arr_ang():
     )
 
 
-def test_reduce_data_density():
+def test_reduce_data_density_slicing():
     cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
     integral = np.sum(cube.data**2) * cube.dv_au * cube.scaling_f
-    cube.reduce_data_density(points_per_angstrom=2)
+    cube.reduce_data_density_slicing(points_per_angstrom=2)
     cube.write_cube_file("low_res.cube", low_precision=True)
     low_res = Cube.from_file("low_res.cube")
     low_res_integral = np.sum(low_res.data**2) * low_res.dv_au
