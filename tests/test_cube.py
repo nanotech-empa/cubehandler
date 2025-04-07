@@ -82,6 +82,15 @@ def test_x_arr_ang():
     )
 
 
+def test_store_unchanged():
+    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    integral_original = cube.integral
+    cube.write_cube_file(this_dir / "unchanged.cube", low_precision=False)
+    unchanged_cube = Cube.from_file(this_dir / "unchanged.cube")
+    integral_unchanged = unchanged_cube.integral
+    assert integral_original == integral_unchanged
+
+
 def test_reduce_data_density_slicing():
     cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
     integral = np.sum(cube.data**2) * cube.dv_au * cube.scaling_f
@@ -91,3 +100,14 @@ def test_reduce_data_density_slicing():
     low_res_integral = np.sum(low_res.data**2) * low_res.dv_au
     assert np.abs(low_res_integral - integral) < 0.01
     assert cube.scaling_f == 0.2848452
+
+
+def test_reduce_data_density_skimage():
+    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    integral = np.sum((cube.data * cube.scaling_f) ** 2) * cube.dv_au
+    cube.reduce_data_density_skimage(scaling_factor=0.4)
+    cube.write_cube_file("low_res2.cube", low_precision=True)
+    low_res = Cube.from_file("low_res2.cube")
+    low_res_integral = np.sum((low_res.data * low_res.scaling_f) ** 2) * low_res.dv_au
+    assert np.abs(low_res_integral - integral) < 0.01
+    assert cube.scaling_f == 0.4374697574623104

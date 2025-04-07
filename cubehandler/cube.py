@@ -152,9 +152,14 @@ class Cube:
         )
 
     def write_cube_file(self, filename, low_precision=False):
-        natoms = len(self.ase_atoms)
+        scaling_factor = 1.0
+        data = self.data.copy()
+
         if low_precision:
-            self.rescale_data()
+            scaling_factor = self.rescale_data(data)
+            data = np.round(data, decimals=self.low_precision_decimals)
+            # Convert -0 to 0
+            data[data == 0] = 0
 
         f = open(filename, "w")
 
@@ -166,35 +171,32 @@ class Cube:
         if "Scaling factor:" in self.comment:
             self.comment = re.sub(
                 r"Scaling factor: \d+\.\d+",
-                f"Scaling factor: {self.scaling_factor}",
+                f"Scaling factor: {scaling_factor}",
                 self.comment,
             )
         else:
-            self.comment += f" Scaling factor: {self.scaling_factor}"
+            self.comment += f" Scaling factor: {scaling_factor}"
         f.write(self.comment + "\n")
 
         dv_br = self.cell / self.data.shape
 
+        natoms = len(self.ase_atoms)
         f.write(
-            "%5d %12.6f %12.6f %12.6f\n"
-            % (natoms, self.origin[0], self.origin[1], self.origin[2])
+            f"{natoms:5d} {self.origin[0]:12.6f} {self.origin[1]:12.6f} {self.origin[2]:12.6f}\n"
         )
 
         for i in range(3):
             f.write(
-                "%5d %12.6f %12.6f %12.6f\n"
-                % (self.data.shape[i], dv_br[i][0], dv_br[i][1], dv_br[i][2])
+                f"{self.data.shape[i]:5d} {dv_br[i][0]:12.6f} {dv_br[i][1]:12.6f} {dv_br[i][2]:12.6f}\n"
             )
 
-        if natoms > 0:
-            positions = self.ase_atoms.positions * ANG_TO_BOHR
-            numbers = self.ase_atoms.get_atomic_numbers()
-            for i in range(natoms):
-                at_x, at_y, at_z = positions[i]
-                f.write(
-                    "%5d %12.6f %12.6f %12.6f %12.6f\n"
-                    % (numbers[i], 0.0, at_x, at_y, at_z)
-                )
+        positions = self.ase_atoms.positions * ANG_TO_BOHR
+        numbers = self.ase_atoms.get_atomic_numbers()
+        for i in range(natoms):
+            at_x, at_y, at_z = positions[i]
+            f.write(
+                f"{numbers[i]:5d} {0.0:12.6f} {at_x:12.6f} {at_y:12.6f} {at_z:12.6f}\n"
+            )
 
         if low_precision:
             string_io = io.StringIO()
@@ -222,14 +224,13 @@ class Cube:
         new_shape = tuple(int(dim * scaling_factor) for dim in self.data.shape)
         self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
 
-    def rescale_data(self):
-        """Rescales the data to be between -1 and 1"""
-        self.scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
-        self.data /= self.scaling_factor
-        self.data = np.round(self.data, decimals=self.low_precision_decimals)
+    def rescale_data(self, data):
+        """Rescales the data to be between -1 and 1."""
 
-        # Convert -0 to 0
-        self.data[self.data == 0] = 0
+        data = self.data.copy()
+        scaling_factor = max(abs(data.min()), abs(data.max()))
+        data /= scaling_factor
+        return scaling_factor
 
     def swapaxes(self, ax1, ax2):
         p = self.ase_atoms.positions
@@ -299,6 +300,11 @@ class Cube:
                 * np.shape(self.data)[2]
             )
         )
+
+    @property
+    def integral(self):
+        """Computes the integral of the cube data."""
+        return np.sum(self.data) * self.dv_au
 
     @property
     def scaling_f(self):
