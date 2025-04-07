@@ -7,6 +7,7 @@ import re
 
 import ase
 import numpy as np
+from skimage import transform
 
 ANG_TO_BOHR = 1.8897259886
 
@@ -217,42 +218,9 @@ class Cube:
         except ValueError:
             print("Warning: Could not reduce data density")
 
-    def reduce_data_density_skimage(self):
-        from skimage.metrics import structural_similarity as ssim
-        from skimage.transform import resize
-
-        def optimal_scaling_factor(
-            data, min_factor=0.1, max_factor=1.0, step=0.1, threshold=0.99
-        ):
-            """
-            Determine the optimal scaling factor for downsampling 3D data without significant loss of information.
-            """
-            original_shape = data.shape
-            best_factor = max_factor
-
-            for factor in np.arange(max_factor, min_factor, -step):
-                new_shape = tuple(max(1, int(dim * factor)) for dim in original_shape)
-                resized_data = resize(
-                    data, new_shape, anti_aliasing=True
-                )  # Upsample back to original shape for comparison
-                upsampled_data = resize(
-                    resized_data, original_shape, anti_aliasing=True
-                )
-                current_ssim = ssim(
-                    data, upsampled_data, data_range=data.max() - data.min()
-                )  # Compute structural_similarity between the original and upsampled data
-
-                if current_ssim >= threshold:
-                    best_factor = factor
-                    # best_ssim = current_ssim
-                else:
-                    break
-
-            return best_factor
-
-        scaling_factor = optimal_scaling_factor(self.data)
+    def reduce_data_density_skimage(self, scaling_factor=0.4):
         new_shape = tuple(int(dim * scaling_factor) for dim in self.data.shape)
-        self.data = resize(self.data, new_shape, anti_aliasing=True)
+        self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
 
     def rescale_data(self):
         """Rescales the data to be between -1 and 1"""
