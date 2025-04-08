@@ -65,3 +65,19 @@ def shrink(
         for file in inp.glob("*cube"):
             out_file = out / (prefix + file.name)
             run_reduction(file.absolute(), out_file)
+
+
+@app.command(help="Render a cube file.")
+def render(input_path: str = typer.Argument(..., help="Path to the input cube file.")):
+    """Render a cube file."""
+    inp = Path(input_path)
+
+    def run_render(inp):
+        cube = Cube.from_file(inp)
+        cube.render()
+
+    if inp.is_file():
+        run_render(inp)
+        typer.echo(f"Rendering cube file: {inp}")
+    else:
+        typer.echo("Please provide a valid cube file.")
