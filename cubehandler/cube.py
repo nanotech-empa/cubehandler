@@ -288,12 +288,6 @@ class Cube:
 
         return points, colors.cpk_colors[numbers[ii]]
 
-    def rescale_data(self):
-        """Rescales the data to be between -1 and 1"""
-        self.scaling_factor = max(abs(self.data.min()), abs(self.data.max()))
-        self.data /= self.scaling_factor
-        self.data = np.round(self.data, decimals=self.low_precision_decimals)
-
     def rescale_data(self, data):
         """Rescales the data to be between -1 and 1."""
         scaling_factor = max(abs(data.min()), abs(data.max()))
