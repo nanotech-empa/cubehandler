@@ -74,7 +74,6 @@ def render(input_path: str = typer.Argument(..., help="Path to the input cube fi
 
     def run_render(inp):
         cube = Cube.from_file(inp)
-        print("RUNNING RENDER (to be implemented)")
         cube.render()
 
     if inp.is_file():
