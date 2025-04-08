@@ -20,8 +20,8 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "ase",
-    "click",
     "scikit-image",
+    "typer",
 ]
 
 [project.optional-dependencies]
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-cubehandler = 'cubehandler.cli.main:cli'
+cubehandler = 'cubehandler.cli.main:app'
 
 [tool.bumpver]
 current_version = "v0.1.0"
