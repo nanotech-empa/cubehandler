@@ -32,7 +32,7 @@ def shrink(
         "reduced_", "--prefix", "-p", help="Prefix for output files."
     ),
     method: str = typer.Option(
-        "default",
+        "slicing",
         "--method",
         help="Method to use for data reduction. Available methods are: slicing, skimage.",
     ),
@@ -51,7 +51,7 @@ def shrink(
         cube = Cube.from_file(inp)
         if method == "skimage":
             cube.reduce_data_density_skimage()
-        elif method == "default":
+        elif method == "slicing":
             cube.reduce_data_density_slicing()
         else:
             raise ValueError(f"Unknown method: {method}")
