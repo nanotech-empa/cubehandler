@@ -21,7 +21,7 @@ def test_read_cube():
         np.array([[15.1178, 0, 0], [0, 15.1178, 0], [0, 0, 15.1178]]),
         atol=0.001,
     )
-    assert cube.scaling_f == 1
+    assert cube.scaling_factor == 1
 
 
 def test_get_xyz_index():
@@ -83,31 +83,53 @@ def test_x_arr_ang():
 
 
 def test_store_unchanged():
-    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
-    integral_original = cube.integral
-    cube.write_cube_file(this_dir / "unchanged.cube", low_precision=False)
+    original = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    original.write_cube_file(this_dir / "unchanged.cube", low_precision=False)
     unchanged_cube = Cube.from_file(this_dir / "unchanged.cube")
-    integral_unchanged = unchanged_cube.integral
-    assert integral_original == integral_unchanged
+    assert original.integral == unchanged_cube.integral
+    assert np.array_equal(original.data, unchanged_cube.data)
 
 
 def test_reduce_data_density_slicing():
-    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
-    integral = np.sum(cube.data**2) * cube.dv_au * cube.scaling_f
-    cube.reduce_data_density_slicing(points_per_angstrom=2)
-    cube.write_cube_file("low_res.cube", low_precision=True)
+    original = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    # The integral of orbital squared should be close to 1.0.
+    assert np.sum(original.data**2) * original.dv_au - 1.0 < 0.01
+
+    original.reduce_data_density_slicing(
+        points_per_angstrom=2
+    )  # This modifies the data array.
+    # After the data reduction the situation should not change.
+    assert np.sum(original.data**2) * original.dv_au - 1.0 < 0.01
+
+    # Storing the data in normal precision mode.
+    original.write_cube_file("low_res.cube", low_precision=False)
+
+    # Reading the file back.
     low_res = Cube.from_file("low_res.cube")
-    low_res_integral = np.sum(low_res.data**2) * low_res.dv_au
-    assert np.abs(low_res_integral - integral) < 0.01
-    assert cube.scaling_f == 0.2848452
+    assert np.sum(low_res.data**2) * low_res.dv_au - 1.0 < 0.01
+    assert (
+        low_res.scaling_factor == 1.0
+    )  # The scaling factor remains the same as we don't change the pricision.
+
+    # Storing the data in low precision mode.
+    original.write_cube_file("low_res_and_precision.cube", low_precision=True)
+
+    # Reading the file back.
+    low_res_and_precision = Cube.from_file("low_res_and_precision.cube")
+    assert (
+        np.sum(low_res_and_precision.data**2) * low_res_and_precision.dv_au - 1.0 < 0.01
+    )
+
+    assert low_res_and_precision.scaling_factor == 0.2848452
 
 
 def test_reduce_data_density_skimage():
-    cube = Cube.from_file(this_dir / "CH4_HOMO.cube")
-    integral = np.sum((cube.data * cube.scaling_f) ** 2) * cube.dv_au
-    cube.reduce_data_density_skimage(scaling_factor=0.4)
-    cube.write_cube_file("low_res2.cube", low_precision=True)
-    low_res = Cube.from_file("low_res2.cube")
-    low_res_integral = np.sum((low_res.data * low_res.scaling_f) ** 2) * low_res.dv_au
-    assert np.abs(low_res_integral - integral) < 0.01
-    assert cube.scaling_f == 0.4374697574623104
+    original = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    # The integral of orbital squared should be close to 1.0.
+    assert np.sum(original.data**2) * original.dv_au - 1.0 < 0.01
+
+    original.reduce_data_density_skimage(
+        resolution_factor=0.4
+    )  # This modifies the data array.
+    # After the data reduction the situation should not change.
+    assert np.sum(original.data**2) * original.dv_au - 1.0 < 0.01

@@ -37,9 +37,7 @@ def remove_useless_zeros(input_string):
 
 
 class Cube:
-    """
-    Gaussian cube format
-    """
+    """Gaussian cube format."""
 
     default_origin = np.array([0.0, 0.0, 0.0])
     default_scaling_factor = 1.0
@@ -158,16 +156,19 @@ class Cube:
         if low_precision:
             scaling_factor = self.rescale_data(data)
             data = np.round(data, decimals=self.low_precision_decimals)
+
             # Convert -0 to 0
             data[data == 0] = 0
 
         f = open(filename, "w")
 
+        # Write the title.
         if self.title is None:
             f.write(filename + "\n")
         else:
             f.write(self.title + "\n")
 
+        # Write the comment.
         if "Scaling factor:" in self.comment:
             self.comment = re.sub(
                 r"Scaling factor: \d+\.\d+",
@@ -178,34 +179,37 @@ class Cube:
             self.comment += f" Scaling factor: {scaling_factor}"
         f.write(self.comment + "\n")
 
-        dv_br = self.cell / self.data.shape
-
         natoms = len(self.ase_atoms)
+
+        # Write the number of atoms and the origin.
         f.write(
             f"{natoms:5d} {self.origin[0]:12.6f} {self.origin[1]:12.6f} {self.origin[2]:12.6f}\n"
         )
 
+        # Write the cell dimensions.
+        dv_br = self.cell / data.shape
         for i in range(3):
             f.write(
-                f"{self.data.shape[i]:5d} {dv_br[i][0]:12.6f} {dv_br[i][1]:12.6f} {dv_br[i][2]:12.6f}\n"
+                f"{data.shape[i]:5d} {dv_br[i][0]:12.6f} {dv_br[i][1]:12.6f} {dv_br[i][2]:12.6f}\n"
             )
 
-        positions = self.ase_atoms.positions * ANG_TO_BOHR
+        # Write the atom positions.
+        pos = self.ase_atoms.positions * ANG_TO_BOHR
         numbers = self.ase_atoms.get_atomic_numbers()
         for i in range(natoms):
-            at_x, at_y, at_z = positions[i]
             f.write(
-                f"{numbers[i]:5d} {0.0:12.6f} {at_x:12.6f} {at_y:12.6f} {at_z:12.6f}\n"
+                f"{numbers[i]:5d} {0.0:12.6f} {pos[i, 0]:12.6f} {pos[i, 1]:12.6f} {pos[i, 2]:12.6f}\n"
             )
 
+        # Write the data.
         if low_precision:
             string_io = io.StringIO()
             format_string = f"%.{self.low_precision_decimals}f"
-            np.savetxt(string_io, self.data.flatten(), fmt=format_string)
+            np.savetxt(string_io, data.flatten(), fmt=format_string)
             result_string = remove_useless_zeros(string_io.getvalue())
             f.write(result_string)
         else:
-            self.data.tofile(f, sep="\n", format="%12.6e")
+            data.tofile(f, sep="\n", format="%12.6e")
 
         f.close()
 
@@ -220,14 +224,12 @@ class Cube:
         except ValueError:
             print("Warning: Could not reduce data density")
 
-    def reduce_data_density_skimage(self, scaling_factor=0.4):
-        new_shape = tuple(int(dim * scaling_factor) for dim in self.data.shape)
+    def reduce_data_density_skimage(self, resolution_factor=0.4):
+        new_shape = tuple(int(dim * resolution_factor) for dim in self.data.shape)
         self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
 
     def rescale_data(self, data):
         """Rescales the data to be between -1 and 1."""
-
-        data = self.data.copy()
         scaling_factor = max(abs(data.min()), abs(data.max()))
         data /= scaling_factor
         return scaling_factor
@@ -305,13 +307,6 @@ class Cube:
     def integral(self):
         """Computes the integral of the cube data."""
         return np.sum(self.data) * self.dv_au
-
-    @property
-    def scaling_f(self):
-        scaling_f = self.scaling_factor
-        if "Scaling_factor" in self.comment:
-            scaling_f = float(self.comment.split()[-1])
-        return scaling_f
 
     @property
     def dv(self):
