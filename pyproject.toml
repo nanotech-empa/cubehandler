@@ -9,18 +9,19 @@ name = "cubehandler"
 name = "cubehandler"
 dynamic = ["version", "description"]
 readme = "README.md"
-#license = {file = 'LICENSE.txt'}
+# license = {file = 'LICENSE.txt'}
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "ase",
     "click",
+    "scikit-image",
 ]
 
 [project.optional-dependencies]
@@ -33,3 +34,20 @@ dev = [
 
 [project.scripts]
 cubehandler = 'cubehandler.cli.main:cli'
+
+[tool.bumpver]
+current_version = "v0.1.0"
+version_pattern = "vMAJOR.MINOR.PATCH[PYTAGNUM]"
+commit_message = "Bump version {old_version} -> {new_version}."
+tag_message = "Release {new_version}."
+tag_scope = "default"
+pre_commit_hook = ""
+post_commit_hook = ""
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"cubehandler/version.py" = [
+    '__version__ = "{pep440_version}"',
+]
