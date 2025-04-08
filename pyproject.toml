@@ -21,6 +21,7 @@ requires-python = ">=3.10"
 dependencies = [
     "ase",
     "click",
+    "scikit-image",
 ]
 
 [project.optional-dependencies]
