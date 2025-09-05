@@ -151,4 +151,8 @@ def sum_cubes(
     # Put the combined data back into the reference cube and write it
     ref.data = result_data  # adjust if your API uses a different attribute
     out = Path(output_path)
+    
+    # Ensure parent directory exists
+    out.parent.mkdir(parents=True, exist_ok=True)
+
     ref.write_cube_file(out, low_precision=low_precision)
