@@ -17,7 +17,7 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "ase",
     "scikit-image",
