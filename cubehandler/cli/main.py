@@ -1,4 +1,5 @@
 import typer
+import fnmatch
 from ..version import __version__
 from pathlib import Path
 from ..cube import Cube
@@ -41,12 +42,30 @@ def shrink(
         "--low-precision/--no-low-precision",
         help="Use low precision for the output cube.",
     ),
+    exclude: list[str] = typer.Option(
+        None,
+        "--exclude",
+        help=(
+            "Exclude patterns (can be repeated). "
+            "Supports shell-style wildcards (e.g. 'wfn*.cube'). "
+            "You may also pass comma-separated values in a single flag."
+        ),
+    ),
 ):
     """Shrink a cube file or all cube files in a directory."""
 
     inp = Path(input_path)
     out = Path(output_path)
+    
+    # Normalize exclude patterns: support repeated flags and comma-separated entries
+    excludes: list[str] = []
+    if exclude:
+        for item in exclude:
+            excludes.extend([p.strip() for p in item.split(",") if p.strip()])
 
+    def is_excluded(filename: str) -> bool:
+        return any(fnmatch.fnmatch(filename, pat) for pat in excludes)
+    
     def run_reduction(inp, out):
         cube = Cube.from_file(inp)
         if method == "skimage":
@@ -63,6 +82,9 @@ def shrink(
     elif inp.is_dir():
         out.mkdir(exist_ok=True)
         for file in inp.glob("*cube"):
+            if excludes and is_excluded(file.name):
+                # skip excluded files
+                continue
             out_file = out / (prefix + file.name)
             run_reduction(file.absolute(), out_file)
             
