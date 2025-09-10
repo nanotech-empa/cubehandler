@@ -8,9 +8,21 @@ import re
 import ase
 import numpy as np
 from skimage import transform
+from skimage.metrics import structural_similarity as ssim
 
 ANG_TO_BOHR = 1.8897259886
 
+
+def optimal_scaling_factor(data, min_factor=0.1, max_factor=1.0, step=0.025, threshold=0.99):
+    n = int(round((max_factor - min_factor) / step)) + 1
+    for factor in np.linspace(min_factor, max_factor, n):
+        new_shape = tuple(max(1, int(dim * factor)) for dim in data.shape)
+        resized = transform.resize(data, new_shape, anti_aliasing=True)
+        up = transform.resize(resized, data.shape, anti_aliasing=True)
+        similarity = ssim(data, up, data_range=data.max() - data.min())
+        if  similarity >= threshold:
+            return factor  # primo factor che passa la soglia = massima compressione accettabile
+    return max_factor
 
 def remove_trailing_zeros(number):
     # Format the number using fixed-point notation with high precision
@@ -219,13 +231,30 @@ class Cube:
         slicer = np.round(
             1.0 / (points_per_angstrom * np.linalg.norm(self.dcell, axis=1))
         ).astype(int)
+        twopointsperangstrom = tuple(round(x / y) for x, y in zip(self.data.shape, slicer))
+        # we keep the original mesh and exit if it is below 2 points per Å
+        if any(b < a for a, b in zip(twopointsperangstrom, self.data.shape)):
+            return
         try:
-            self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+            self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]] 
         except ValueError:
             print("Warning: Could not reduce data density")
 
-    def reduce_data_density_skimage(self, resolution_factor=0.4):
-        new_shape = tuple(int(dim * resolution_factor) for dim in self.data.shape)
+
+
+    def reduce_data_density_skimage(self, thr=0.9986, points_per_angstrom=2):
+        # thr of 0.9986 chosen with a test on a spin density to obtain similar mesh to 2 points/Å
+        slicer = np.round(
+            1.0 / (points_per_angstrom * np.linalg.norm(self.dcell, axis=1))
+        ).astype(int)
+        twopointsperangstrom = tuple(round(x / y) for x, y in zip(self.data.shape, slicer))
+        # we keep the original mesh and exit if it is below 2 points per Å
+        if any(b < a for a, b in zip(twopointsperangstrom, self.data.shape)):
+            return
+        before = self.data.copy()
+        scale = optimal_scaling_factor(self.data, threshold=thr)
+        assert np.array_equal(self.data, before) 
+        new_shape = tuple(max(1, int(dim * scale)) for dim in self.data.shape)        
         self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
 
     def rescale_data(self, data):
