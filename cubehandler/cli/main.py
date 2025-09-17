@@ -114,3 +114,55 @@ def shrink(
 
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
+
+
+def parse_pairs(pairs: list[str]) -> list[tuple[Path, float]]:
+    if len(pairs) % 2 != 0:
+        typer.echo("Error: each cube file must be followed by a coefficient.", err=True)
+        raise typer.Exit(1)
+
+    result = []
+    for i in range(0, len(pairs), 2):
+        path = Path(pairs[i])
+        coeff_str = pairs[i + 1]
+        try:
+            coeff = float(coeff_str)
+        except ValueError:
+            typer.echo(f"Error: {coeff_str} is not a valid float.", err=True)
+            raise typer.Exit(1)
+        result.append((path, coeff))
+    return result
+
+
+@app.command()
+def sum(
+    inputs: list[str] = typer.Argument(
+        ..., allow_dash=True, help="Pairs of cube file and coefficient."
+    ),
+    output: Path = typer.Option(..., "--output", "-o", help="Output cube file."),
+    overwrite: bool = typer.Option(
+        False, "--overwrite", help="Allow overwriting output file."
+    ),
+):
+    """Sum multiple cube files with scaling coefficients into a single cube file.
+
+    Example usage: cubehandler sum cube1.cube 1.0 cube2.cube 2.0 -o output.cube
+
+    In case of negative coefficients, use '--' to separate options from positional arguments:
+
+    cubehandler sum -o output.cube -- cube1.cube 1.0 -- cube2.cube -1.0
+    """
+    pairs = parse_pairs(inputs)
+
+    if output.exists() and not overwrite:
+        typer.echo(f"Error: {output} already exists (use --overwrite).", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Summing into {output}:")
+    cube = Cube.from_file(pairs[0][0])
+    result = cube.data.copy() * pairs[0][1]
+    for path, coeff in pairs[1:]:
+        tmp_cube = Cube.from_file(path)
+        result += tmp_cube.data * coeff
+    cube.data = result
+    cube.write_cube_file(output)
