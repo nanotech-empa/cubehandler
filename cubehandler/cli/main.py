@@ -1,9 +1,10 @@
 import typer
-from ..version import __version__
 from pathlib import Path
 from ..cube import Cube
 import enum
 import yaml
+
+from ..version import __version__
 
 app = typer.Typer(help="Cubehandler: a tool to handle cube files.")
 
@@ -39,12 +40,29 @@ def main(
     pass
 
 
+def input_paths_argument():
+    return typer.Argument(
+        ..., exists=True, readable=True, help="One or more cube files to process."
+    )
+
+
+def output_dir_option():
+    return typer.Option(
+        None,
+        "--output-dir",
+        "-d",
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        exists=False,
+        help="Directory to place output files (default: next to inputs).",
+    )
+
+
 @app.command(help="Shrink a cube file.")
 def shrink(
-    input_path: str = typer.Argument(..., help="Path to the input file or directory."),
-    output_path: str = typer.Argument(
-        ..., help="Path to the output file or directory."
-    ),
+    input_paths: list[Path] = input_paths_argument(),
+    output_dir: Path = output_dir_option(),
     prefix: str = typer.Option(
         "reduced_", "--prefix", "-p", help="Prefix for output files."
     ),
@@ -63,8 +81,6 @@ def shrink(
     """Shrink a cube file or all cube files in a directory."""
 
     output = {"shrink": []}
-    inp = Path(input_path)
-    out = Path(output_path)
 
     def run_reduction(inp, out):
         cube = Cube.from_file(inp)
@@ -77,29 +93,24 @@ def shrink(
 
         cube.write_cube_file(out, low_precision=low_precision)
 
-    if inp.is_file():
-        run_reduction(inp, out)
+    # Create output directory if it doesn't exist
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    for inp in input_paths:
+        if output_dir is None:
+            out_file = inp.parent / (prefix + inp.name)
+        else:
+            out_file = output_dir / (prefix + inp.name)
+        run_reduction(inp, out_file)
         output["shrink"].append(
             {
                 "input": str(inp),
-                "output": str(out),
+                "output": str(out_file),
                 "method": method,
                 "low_precision": low_precision,
             }
         )
-    elif inp.is_dir():
-        out.mkdir(exist_ok=True)
-        for file in inp.glob("*cube"):
-            out_file = out / (prefix + file.name)
-            run_reduction(file.absolute(), out_file)
-            output["shrink"].append(
-                {
-                    "input": str(inp / file.name),
-                    "output": str(out_file),
-                    "method": method,
-                    "low_precision": low_precision,
-                }
-            )
 
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
