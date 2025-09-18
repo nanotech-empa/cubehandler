@@ -160,9 +160,6 @@ def sum(
 
     typer.echo(f"Summing into {output}:")
     cube = Cube.from_file(pairs[0][0])
-    result = cube.data.copy() * pairs[0][1]
     for path, coeff in pairs[1:]:
-        tmp_cube = Cube.from_file(path)
-        result += tmp_cube.data * coeff
-    cube.data = result
+        cube += Cube.from_file(path) * coeff
     cube.write_cube_file(output)
