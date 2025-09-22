@@ -150,3 +150,19 @@ def test_reduce_data_density_skimage():
     )  # This modifies the data array.
     # After the data reduction the situation should not change.
     assert np.sum(original.data**2) * original.dv_au - 1.0 < 0.01
+
+
+def test_math_operations():
+    original = Cube.from_file(this_dir / "CH4_HOMO.cube")
+
+    # Test scalar multiplication
+    scaled = original * 2.0
+    assert np.all(scaled.data == original.data * 2.0)
+
+    scaled_reversed = 2.0 * original
+    assert np.all(scaled_reversed.data == scaled.data * 0.5)
+
+    # Test +=
+    original_data = original.data.copy()
+    original += scaled
+    assert np.all(original.data == original_data + scaled.data)
