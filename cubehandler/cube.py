@@ -73,6 +73,37 @@ class Cube:
         else:
             self.cell_n = cell_n
 
+    def __mul__(self, coeff):
+        if not isinstance(coeff, (int, float)):
+            return NotImplemented
+        new_cube = self.copy()
+        if new_cube.data is not None:
+            new_cube.data = new_cube.data * coeff
+        return new_cube
+
+    def __rmul__(self, coeff):
+        return self.__mul__(coeff)
+
+    def __iadd__(self, other):
+        if not isinstance(other, Cube):
+            return NotImplemented
+        self.data += other.data
+        return self  # important: return self for in-place ops
+
+    def copy(self):
+        """Returns a deep copy of the cube object."""
+        return Cube(
+            title=self.title,
+            comment=self.comment,
+            ase_atoms=self.ase_atoms.copy() if self.ase_atoms is not None else None,
+            origin=self.origin.copy(),
+            scaling_factor=self.scaling_factor,
+            low_precision_decimals=self.low_precision_decimals,
+            cell=self.cell.copy() if self.cell is not None else None,
+            cell_n=self.cell_n,
+            data=self.data.copy() if self.data is not None else None,
+        )
+
     @classmethod
     def from_file_handle(cls, filehandle, read_data=True, apply_scaling=True):
         f = filehandle
