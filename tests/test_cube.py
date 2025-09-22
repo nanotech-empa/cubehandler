@@ -160,7 +160,7 @@ def test_math_operations():
     assert np.all(scaled.data == original.data * 2.0)
 
     scaled_reversed = 2.0 * original
-    assert np.all(scaled_reversed.data == scaled.data * 0.5)
+    assert np.all(scaled_reversed.data == original.data * 2.0)
 
     # Test +=
     original_data = original.data.copy()
