@@ -90,6 +90,23 @@ def test_store_unchanged():
     assert np.array_equal(original.data, unchanged_cube.data)
 
 
+def test_copy_cube():
+    original = Cube.from_file(this_dir / "CH4_HOMO.cube")
+    copied = original.copy()
+    assert original.title == copied.title
+    assert original.ase_atoms == copied.ase_atoms
+    assert id(original.ase_atoms) != id(copied.ase_atoms)
+    assert np.all(original.origin == copied.origin)
+    assert id(original.origin) != id(copied.origin)
+    assert original.scaling_factor == copied.scaling_factor
+    assert original.low_precision_decimals == copied.low_precision_decimals
+    assert np.all(original.cell == copied.cell)
+    assert id(original.cell) != id(copied.cell)
+    assert np.all(original.data == copied.data)
+    assert id(original.data) != id(copied.data)
+    assert np.all(original.cell_n == copied.cell_n)
+
+
 def test_reduce_data_density_slicing():
     original = Cube.from_file(this_dir / "CH4_HOMO.cube")
     # The integral of orbital squared should be close to 1.0.
