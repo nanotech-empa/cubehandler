@@ -76,18 +76,13 @@ class Cube:
     def __mul__(self, coeff):
         if not isinstance(coeff, (int, float)):
             return NotImplemented
-        new_cube = Cube(
-            title=self.title,
-            comment=self.comment,
-            ase_atoms=self.ase_atoms,
-            origin=self.origin,
-            scaling_factor=self.scaling_factor,
-            low_precision_decimals=self.low_precision_decimals,
-            cell=self.cell,
-            cell_n=self.cell_n,
-            data=self.data * coeff if self.data is not None else None,
-        )
+        new_cube = self.copy()
+        if new_cube.data is not None:
+            new_cube.data = new_cube.data * coeff
         return new_cube
+
+    def __rmul__(self, coeff):
+        return self.__mul__(coeff)
 
     def __iadd__(self, other):
         if not isinstance(other, Cube):

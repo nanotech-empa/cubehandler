@@ -158,7 +158,6 @@ def sum(
         typer.echo(f"Error: {output} already exists (use --overwrite).", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Summing into {output}:")
     cube = Cube.from_file(pairs[0][0])
     for path, coeff in pairs[1:]:
         cube += Cube.from_file(path) * coeff
