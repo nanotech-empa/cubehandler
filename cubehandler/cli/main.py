@@ -143,6 +143,7 @@ def sum(
     overwrite: bool = typer.Option(
         False, "--overwrite", help="Allow overwriting output file."
     ),
+    verbosity: int = VerbosityOption,
 ):
     """Sum multiple cube files with scaling coefficients into a single cube file.
 
@@ -152,6 +153,14 @@ def sum(
 
     cubehandler sum -o output.cube -- cube1.cube 1.0 cube2.cube -1.0
     """
+
+    output_log = {
+        "sum": {
+            "inputs": [],
+            "output": str(output),
+        }
+    }
+
     pairs = parse_pairs(inputs)
 
     if output.exists() and not overwrite:
@@ -159,7 +168,12 @@ def sum(
         raise typer.Exit(1)
 
     cube = Cube.from_file(pairs[0][0]) * pairs[0][1]
+    output_log["sum"]["inputs"].append(
+        {"file": str(pairs[0][0]), "coefficient": pairs[0][1]}
+    )
     for path, coeff in pairs[1:]:
-        print(path, coeff)
+        output_log["sum"]["inputs"].append({"file": str(path), "coefficient": coeff})
         cube += Cube.from_file(path) * coeff
     cube.write_cube_file(output)
+    if verbosity >= Verbosity.INFO:
+        typer.echo(yaml.dump(output_log, sort_keys=False))
