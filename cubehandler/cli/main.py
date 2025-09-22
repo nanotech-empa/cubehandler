@@ -150,7 +150,7 @@ def sum(
 
     In case of negative coefficients, use '--' to separate options from positional arguments:
 
-    cubehandler sum -o output.cube -- cube1.cube 1.0 -- cube2.cube -1.0
+    cubehandler sum -o output.cube -- cube1.cube 1.0 cube2.cube -1.0
     """
     pairs = parse_pairs(inputs)
 
@@ -158,7 +158,8 @@ def sum(
         typer.echo(f"Error: {output} already exists (use --overwrite).", err=True)
         raise typer.Exit(1)
 
-    cube = Cube.from_file(pairs[0][0])
+    cube = Cube.from_file(pairs[0][0]) * pairs[0][1]
     for path, coeff in pairs[1:]:
+        print(path, coeff)
         cube += Cube.from_file(path) * coeff
     cube.write_cube_file(output)
