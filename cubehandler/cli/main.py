@@ -3,6 +3,7 @@ from pathlib import Path
 from ..cube import Cube
 import enum
 import yaml
+from glob import glob
 
 from ..version import __version__
 
@@ -42,7 +43,7 @@ def main(
 
 def input_paths_argument():
     return typer.Argument(
-        ..., exists=True, readable=True, help="One or more cube files to process."
+        ..., exists=False, readable=True, help="One or more cube files to process."
     )
 
 
@@ -57,6 +58,11 @@ def output_dir_option():
         exists=False,
         help="Directory to place output files (default: next to inputs).",
     )
+
+
+def bash_like_globbing(value: Path) -> list[Path]:
+    """Expand bash-like globbing patterns in the input path."""
+    return [Path(p) for p in glob(str(value))]
 
 
 @app.command(help="Shrink a cube file.")
@@ -79,7 +85,6 @@ def shrink(
     verbosity: int = VerbosityOption,
 ):
     """Shrink a cube file or all cube files in a directory."""
-
     output = {"shrink": []}
 
     def run_reduction(inp, out):
@@ -98,19 +103,20 @@ def shrink(
         output_dir.mkdir(parents=True, exist_ok=True)
 
     for inp in input_paths:
-        if output_dir is None:
-            out_file = inp.parent / (prefix + inp.name)
-        else:
-            out_file = output_dir / (prefix + inp.name)
-        run_reduction(inp, out_file)
-        output["shrink"].append(
-            {
-                "input": str(inp),
-                "output": str(out_file),
-                "method": method,
-                "low_precision": low_precision,
-            }
-        )
+        for my_path in bash_like_globbing(inp):
+            if output_dir is None:
+                out_file = my_path.parent / (prefix + my_path.name)
+            else:
+                out_file = output_dir / (prefix + my_path.name)
+            run_reduction(my_path, out_file)
+            output["shrink"].append(
+                {
+                    "input": str(my_path),
+                    "output": str(out_file),
+                    "method": method,
+                    "low_precision": low_precision,
+                }
+            )
 
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
@@ -120,7 +126,6 @@ def parse_pairs(pairs: list[str]) -> list[tuple[Path, float]]:
     if len(pairs) % 2 != 0:
         typer.echo("Error: each cube file must be followed by a coefficient.", err=True)
         raise typer.Exit(1)
-
     result = []
     for i in range(0, len(pairs), 2):
         path = Path(pairs[i])
@@ -177,3 +182,24 @@ def sum(
     cube.write_cube_file(output)
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output_log, sort_keys=False))
+
+
+@app.command()
+def run(yaml_file: Path = typer.Argument(..., exists=True, readable=True)):
+    """Run a series of operations defined in a YAML file."""
+    from typer.testing import CliRunner
+
+    runner = CliRunner()
+
+    with open(yaml_file, "r") as f:
+        config = yaml.safe_load(f)
+
+    for step in config.get("steps", []):
+        command = step.get("command")
+        all_tokens = [command] + [str(arg) for arg in step.get("args", [])]
+        options = [
+            (f"--{k.replace('_', '-')}", v) for k, v in step.get("options", {}).items()
+        ]
+        all_tokens += [str(item) for opt in options for item in opt if item is not None]
+        result = runner.invoke(app, all_tokens)
+        typer.echo(result.stdout)
