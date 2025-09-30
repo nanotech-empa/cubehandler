@@ -196,10 +196,13 @@ def run(yaml_file: Path = typer.Argument(..., exists=True, readable=True)):
 
     for step in config.get("steps", []):
         command = step.get("command")
-        all_tokens = [command] + [str(arg) for arg in step.get("args", [])]
+        all_tokens = [command]
         options = [
             (f"--{k.replace('_', '-')}", v) for k, v in step.get("options", {}).items()
         ]
         all_tokens += [str(item) for opt in options for item in opt if item is not None]
+        all_tokens += ["--"]  # to separate options from arguments
+        all_tokens += [str(arg) for arg in step.get("args", [])]
+        print("Running command:", " ".join(all_tokens))
         result = runner.invoke(app, all_tokens)
         typer.echo(result.stdout)
