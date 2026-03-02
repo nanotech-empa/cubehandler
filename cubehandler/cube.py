@@ -4,12 +4,40 @@ Routines regarding gaussian cube files
 
 import io
 import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Sequence
 
 import ase
 import numpy as np
 from skimage import transform
 
 ANG_TO_BOHR = 1.8897259886
+SUPPORTED_IMAGE_FORMATS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp", "pnm", "ps")
+_PIL_IMAGE_FORMATS = {
+    "png": "PNG",
+    "jpg": "JPEG",
+    "jpeg": "JPEG",
+    "tif": "TIFF",
+    "tiff": "TIFF",
+    "bmp": "BMP",
+    "pnm": "PPM",
+    "ps": "EPS",
+}
+
+
+@dataclass(frozen=True)
+class RenderSpec:
+    orientation16: tuple[float, ...]
+    iso_pairs: tuple[tuple[float, str], ...]
+    image_format: str
+    output_path: Path
+    width: int = 1600
+    height: int = 1200
+    background: str = "#FFFFFF"
+    surface_opacity: float = 0.55
+    atom_scale: float = 0.8
+    bond_radius: float = 0.1
 
 
 def remove_trailing_zeros(number):
@@ -258,6 +286,187 @@ class Cube:
     def reduce_data_density_skimage(self, resolution_factor=0.4):
         new_shape = tuple(int(dim * resolution_factor) for dim in self.data.shape)
         self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
+
+    def render(self, spec: RenderSpec) -> Path:
+        """Render a cube file using a camera orientation from nglview."""
+        import pyvista as pv
+        from PIL import Image
+        from ase import data as ase_data
+        from ase.data import colors as ase_colors
+
+        image_format = spec.image_format.lower()
+        if image_format not in SUPPORTED_IMAGE_FORMATS:
+            raise ValueError(
+                f"Unsupported image format '{spec.image_format}'. "
+                f"Supported formats: {', '.join(SUPPORTED_IMAGE_FORMATS)}."
+            )
+        if not spec.iso_pairs:
+            raise ValueError("At least one isovalue/color pair must be provided.")
+
+        output_path = Path(spec.output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        rotation, translation, scale = self._decompose_ngl_orientation(
+            spec.orientation16
+        )
+        structured_grid = self._build_structured_grid(rotation, translation)
+
+        plotter = pv.Plotter(off_screen=True, window_size=(spec.width, spec.height))
+        plotter.set_background(spec.background)
+
+        for isovalue, color in spec.iso_pairs:
+            contour = structured_grid.contour(
+                isosurfaces=[isovalue], scalars="cube_data"
+            )
+            if contour.n_points:
+                plotter.add_mesh(
+                    contour,
+                    color=color,
+                    opacity=spec.surface_opacity,
+                    smooth_shading=True,
+                )
+
+        transformed_atom_positions = self._transform_points(
+            self.ase_atoms.positions, rotation, translation
+        )
+        atom_numbers = self.ase_atoms.get_atomic_numbers()
+        for number, position in zip(atom_numbers, transformed_atom_positions):
+            radius = float(ase_data.covalent_radii[number] * spec.atom_scale)
+            sphere = pv.Sphere(
+                radius=radius,
+                center=tuple(position),
+                theta_resolution=24,
+                phi_resolution=24,
+            )
+            atom_color = tuple(float(c) for c in ase_colors.cpk_colors[number])
+            plotter.add_mesh(sphere, color=atom_color, smooth_shading=True)
+
+        bond_points, _ = self._compute_bonds(self.ase_atoms)
+        if len(bond_points):
+            transformed_bond_points = self._transform_points(
+                bond_points.reshape(-1, 3), rotation, translation
+            ).reshape(bond_points.shape)
+            for start, end in transformed_bond_points:
+                line = pv.Line(start, end)
+                tube = line.tube(radius=spec.bond_radius)
+                plotter.add_mesh(tube, color="#A0A0A0", smooth_shading=True)
+
+        plotter.camera.position = (0.0, 0.0, -scale)
+        plotter.camera.focal_point = (0.0, 0.0, 0.0)
+        plotter.camera.up = (0.0, 1.0, 0.0)
+        image_array = plotter.screenshot(return_img=True)
+        plotter.close()
+
+        image = Image.fromarray(image_array)
+        pil_format = _PIL_IMAGE_FORMATS[image_format]
+        if pil_format in {"JPEG", "EPS"} and image.mode in {"RGBA", "LA"}:
+            image = image.convert("RGB")
+        image.save(output_path, format=pil_format)
+        return output_path
+
+    @staticmethod
+    def _transform_points(
+        points: np.ndarray,
+        rotation: np.ndarray,
+        translation: np.ndarray,
+    ) -> np.ndarray:
+        points = np.asarray(points, dtype=float)
+        return points @ rotation.T + translation
+
+    @staticmethod
+    def _decompose_ngl_orientation(
+        orientation16: Sequence[float],
+    ) -> tuple[np.ndarray, np.ndarray, float]:
+        orientation_values = np.asarray(orientation16, dtype=float)
+        if orientation_values.size != 16:
+            raise ValueError("Camera orientation must contain exactly 16 numbers.")
+        if not np.all(np.isfinite(orientation_values)):
+            raise ValueError("Camera orientation must contain only finite numbers.")
+
+        matrix = orientation_values.reshape((4, 4), order="F")
+        affine = matrix[:3, :3]
+        translation = matrix[:3, 3]
+
+        column_norms = np.linalg.norm(affine, axis=0)
+        scale = float(np.mean(column_norms))
+        if not np.isfinite(scale) or scale <= 1e-12:
+            raise ValueError("Could not derive camera scale from orientation matrix.")
+
+        rotation = affine / scale
+        if np.linalg.matrix_rank(rotation) < 3:
+            raise ValueError("Camera orientation matrix is singular.")
+
+        u_mat, _, vh_mat = np.linalg.svd(rotation)
+        rotation = u_mat @ vh_mat
+        if np.linalg.det(rotation) < 0:
+            u_mat[:, -1] *= -1
+            rotation = u_mat @ vh_mat
+
+        if not np.all(np.isfinite(rotation)):
+            raise ValueError("Camera orientation produced non-finite rotation values.")
+        return rotation, translation, scale
+
+    def _build_structured_grid(
+        self,
+        rotation: np.ndarray,
+        translation: np.ndarray,
+    ):
+        import pyvista as pv
+
+        nx, ny, nz = (int(v) for v in self.cell_n)
+        x_idx, y_idx, z_idx = np.meshgrid(
+            np.arange(nx, dtype=float),
+            np.arange(ny, dtype=float),
+            np.arange(nz, dtype=float),
+            indexing="ij",
+        )
+        origin_ang = self.origin / ANG_TO_BOHR
+        voxel_vectors_ang = self.dcell_ang
+
+        coords = (
+            origin_ang
+            + x_idx[..., None] * voxel_vectors_ang[0]
+            + y_idx[..., None] * voxel_vectors_ang[1]
+            + z_idx[..., None] * voxel_vectors_ang[2]
+        )
+        transformed_coords = self._transform_points(
+            coords.reshape(-1, 3), rotation, translation
+        ).reshape(coords.shape)
+
+        grid = pv.StructuredGrid(
+            transformed_coords[..., 0],
+            transformed_coords[..., 1],
+            transformed_coords[..., 2],
+        )
+        grid["cube_data"] = np.asarray(self.data, dtype=float).ravel(order="F")
+        return grid
+
+    def _compute_bonds(self, structure):
+        """Create an list of bonds for the structure."""
+
+        import ase.neighborlist
+        from ase.data import colors
+
+        if len(structure) <= 1:
+            return np.empty((0, 2, 3), dtype=float), np.empty((0, 3), dtype=float)
+
+        # The value 1.09 is chosen based on our experience. It is a good compromise between showing too many bonds
+        # and not showing bonds that should be there.
+        cutoff = ase.neighborlist.natural_cutoffs(structure, mult=1.09)
+
+        ii, bond_vectors = ase.neighborlist.neighbor_list(
+            "iD", structure, cutoff, self_interaction=False
+        )
+        # bond start position
+        v1 = structure.positions[ii]
+        # middle position
+        v2 = v1 + bond_vectors * 0.5
+        points = np.stack((v1, v2), axis=1)
+
+        # Choose the correct way for computing the cylinder.
+        numbers = structure.get_atomic_numbers()
+
+        return points, colors.cpk_colors[numbers[ii]]
 
     def rescale_data(self, data):
         """Rescales the data to be between -1 and 1."""

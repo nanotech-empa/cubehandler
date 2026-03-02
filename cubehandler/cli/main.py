@@ -1,13 +1,39 @@
-import typer
-from pathlib import Path
-from ..cube import Cube
 import enum
+import re
+from pathlib import Path
+from typing import Optional
+
+import typer
 import yaml
 from glob import glob
 
 from ..version import __version__
 
+from ..cube import Cube, RenderSpec, SUPPORTED_IMAGE_FORMATS
+from ..version import __version__
+
 app = typer.Typer(help="Cubehandler: a tool to handle cube files.")
+ISO_PATTERN = re.compile(
+    r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*:\s*(#[0-9A-Fa-f]{6})\s*$"
+)
+Orientation16 = tuple[
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+]
 
 
 class Verbosity(enum.IntEnum):
@@ -120,6 +146,85 @@ def shrink(
 
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
+
+@app.command(help="Render a cube file.")
+def render(
+    cube_file: str = typer.Argument(..., help="Path to the input cube file."),
+    orientation: Orientation16 = typer.Option(
+        ...,
+        "--orientation",
+        help="Camera orientation matrix from nglview (16 numbers).",
+    ),
+    iso: list[str] = typer.Option(
+        ...,
+        "--iso",
+        help="Isovalue/color pair in the form <value:#RRGGBB>. Repeat for multiple pairs.",
+    ),
+    image_format: str = typer.Option(
+        ...,
+        "--format",
+        help=f"Output image format. Supported: {', '.join(SUPPORTED_IMAGE_FORMATS)}.",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output image path. Defaults to <cube_stem>_render.<format>.",
+    ),
+):
+    """Render a cube file with nglview-compatible camera orientation."""
+    input_path = Path(cube_file)
+    if not input_path.is_file():
+        raise typer.BadParameter(
+            f"Cube file does not exist: {input_path}", param_hint="cube_file"
+        )
+
+    normalized_format = image_format.lower()
+    if normalized_format not in SUPPORTED_IMAGE_FORMATS:
+        raise typer.BadParameter(
+            f"Unsupported format '{image_format}'. "
+            f"Choose one of: {', '.join(SUPPORTED_IMAGE_FORMATS)}.",
+            param_hint="--format",
+        )
+
+    iso_pairs: list[tuple[float, str]] = []
+    for iso_item in iso:
+        match = ISO_PATTERN.match(iso_item)
+        if match is None:
+            raise typer.BadParameter(
+                f"Invalid --iso value '{iso_item}'. Use <value:#RRGGBB>.",
+                param_hint="--iso",
+            )
+        isovalue = float(match.group(1))
+        color = match.group(2).upper()
+        iso_pairs.append((isovalue, color))
+
+    if output is None:
+        output_path = Path.cwd() / f"{input_path.stem}_render.{normalized_format}"
+    else:
+        output_path = Path(output)
+        if not output_path.suffix:
+            output_path = output_path.with_suffix(f".{normalized_format}")
+        elif output_path.suffix.lower() != f".{normalized_format}":
+            raise typer.BadParameter(
+                f"Output extension '{output_path.suffix}' does not match --format '{normalized_format}'.",
+                param_hint="--output",
+            )
+
+    cube = Cube.from_file(input_path)
+    render_spec = RenderSpec(
+        orientation16=tuple(float(v) for v in orientation),
+        iso_pairs=tuple(iso_pairs),
+        image_format=normalized_format,
+        output_path=output_path,
+    )
+
+    try:
+        rendered_file = cube.render(render_spec)
+    except (ImportError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc))
+
+    typer.echo(f"Rendered cube file: {rendered_file}")
 
 
 def parse_pairs(pairs: list[str]) -> list[tuple[Path, float]]:
