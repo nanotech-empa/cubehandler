@@ -5,6 +5,9 @@ from typing import Optional
 
 import typer
 import yaml
+from glob import glob
+
+from ..version import __version__
 
 from ..cube import Cube, RenderSpec, SUPPORTED_IMAGE_FORMATS
 from ..version import __version__
@@ -64,12 +67,34 @@ def main(
     pass
 
 
+def input_paths_argument():
+    return typer.Argument(
+        ..., exists=False, readable=True, help="One or more cube files to process."
+    )
+
+
+def output_dir_option():
+    return typer.Option(
+        None,
+        "--output-dir",
+        "-d",
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        exists=False,
+        help="Directory to place output files (default: next to inputs).",
+    )
+
+
+def bash_like_globbing(value: Path) -> list[Path]:
+    """Expand bash-like globbing patterns in the input path."""
+    return [Path(p) for p in glob(str(value))]
+
+
 @app.command(help="Shrink a cube file.")
 def shrink(
-    input_path: str = typer.Argument(..., help="Path to the input file or directory."),
-    output_path: str = typer.Argument(
-        ..., help="Path to the output file or directory."
-    ),
+    input_paths: list[Path] = input_paths_argument(),
+    output_dir: Path = output_dir_option(),
     prefix: str = typer.Option(
         "reduced_", "--prefix", "-p", help="Prefix for output files."
     ),
@@ -86,10 +111,7 @@ def shrink(
     verbosity: int = VerbosityOption,
 ):
     """Shrink a cube file or all cube files in a directory."""
-
     output = {"shrink": []}
-    inp = Path(input_path)
-    out = Path(output_path)
 
     def run_reduction(inp, out):
         cube = Cube.from_file(inp)
@@ -102,24 +124,20 @@ def shrink(
 
         cube.write_cube_file(out, low_precision=low_precision)
 
-    if inp.is_file():
-        run_reduction(inp, out)
-        output["shrink"].append(
-            {
-                "input": str(inp),
-                "output": str(out),
-                "method": method,
-                "low_precision": low_precision,
-            }
-        )
-    elif inp.is_dir():
-        out.mkdir(exist_ok=True)
-        for file in inp.glob("*cube"):
-            out_file = out / (prefix + file.name)
-            run_reduction(file.absolute(), out_file)
+    # Create output directory if it doesn't exist
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    for inp in input_paths:
+        for my_path in bash_like_globbing(inp):
+            if output_dir is None:
+                out_file = my_path.parent / (prefix + my_path.name)
+            else:
+                out_file = output_dir / (prefix + my_path.name)
+            run_reduction(my_path, out_file)
             output["shrink"].append(
                 {
-                    "input": str(inp / file.name),
+                    "input": str(my_path),
                     "output": str(out_file),
                     "method": method,
                     "low_precision": low_precision,
@@ -128,7 +146,6 @@ def shrink(
 
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
-
 
 @app.command(help="Render a cube file.")
 def render(
@@ -208,3 +225,89 @@ def render(
         raise typer.BadParameter(str(exc))
 
     typer.echo(f"Rendered cube file: {rendered_file}")
+
+
+def parse_pairs(pairs: list[str]) -> list[tuple[Path, float]]:
+    if len(pairs) % 2 != 0:
+        typer.echo("Error: each cube file must be followed by a coefficient.", err=True)
+        raise typer.Exit(1)
+    result = []
+    for i in range(0, len(pairs), 2):
+        path = Path(pairs[i])
+        coeff_str = pairs[i + 1]
+        try:
+            coeff = float(coeff_str)
+        except ValueError:
+            typer.echo(f"Error: {coeff_str} is not a valid float.", err=True)
+            raise typer.Exit(1)
+        result.append((path, coeff))
+    return result
+
+
+@app.command()
+def sum(
+    inputs: list[str] = typer.Argument(
+        ..., allow_dash=True, help="Pairs of cube file and coefficient."
+    ),
+    output: Path = typer.Option(..., "--output", "-o", help="Output cube file."),
+    overwrite: bool = typer.Option(
+        False, "--overwrite", help="Allow overwriting output file."
+    ),
+    verbosity: int = VerbosityOption,
+):
+    """Sum multiple cube files with scaling coefficients into a single cube file.
+
+    Example usage: cubehandler sum cube1.cube 1.0 cube2.cube 2.0 -o output.cube
+
+    In case of negative coefficients, use '--' to separate options from positional arguments:
+
+    cubehandler sum -o output.cube -- cube1.cube 1.0 cube2.cube -1.0
+    """
+
+    output_log = {
+        "sum": {
+            "inputs": [],
+            "output": str(output),
+        }
+    }
+
+    pairs = parse_pairs(inputs)
+
+    if output.exists() and not overwrite:
+        typer.echo(f"Error: {output} already exists (use --overwrite).", err=True)
+        raise typer.Exit(1)
+
+    cube = Cube.from_file(pairs[0][0]) * pairs[0][1]
+    output_log["sum"]["inputs"].append(
+        {"file": str(pairs[0][0]), "coefficient": pairs[0][1]}
+    )
+    for path, coeff in pairs[1:]:
+        output_log["sum"]["inputs"].append({"file": str(path), "coefficient": coeff})
+        cube += Cube.from_file(path) * coeff
+    cube.write_cube_file(output)
+    if verbosity >= Verbosity.INFO:
+        typer.echo(yaml.dump(output_log, sort_keys=False))
+
+
+@app.command()
+def run(yaml_file: Path = typer.Argument(..., exists=True, readable=True)):
+    """Run a series of operations defined in a YAML file."""
+    from typer.testing import CliRunner
+
+    runner = CliRunner()
+
+    with open(yaml_file, "r") as f:
+        config = yaml.safe_load(f)
+
+    for step in config.get("steps", []):
+        command = step.get("command")
+        all_tokens = [command]
+        options = [
+            (f"--{k.replace('_', '-')}", v) for k, v in step.get("options", {}).items()
+        ]
+        all_tokens += [str(item) for opt in options for item in opt if item is not None]
+        all_tokens += ["--"]  # to separate options from arguments
+        all_tokens += [str(arg) for arg in step.get("args", [])]
+        print("Running command:", " ".join(all_tokens))
+        result = runner.invoke(app, all_tokens)
+        typer.echo(result.stdout)
