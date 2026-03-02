@@ -20,6 +20,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "ase",
+    "pyvista>=0.46",
     "scikit-image",
     "typer",
 ]
