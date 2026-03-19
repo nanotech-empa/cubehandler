@@ -22,6 +22,7 @@ dependencies = [
     "ase",
     "scikit-image",
     "typer",
+    "pyyaml~=6.0",
 ]
 
 [project.optional-dependencies]
