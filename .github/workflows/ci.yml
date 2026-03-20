@@ -24,7 +24,9 @@ jobs:
           activate-environment: true
 
       - name: Smoke test uvx installation
-        run: uvx cubehandler --help
+        # uvx automatically installs the package in a dedicated environment,
+        # here we instruct it to build the package locally instead of downloading it from PyPI
+        run: uvx --from . cubehandler --help
 
       - name: Install package and its dependencies
         run: uv pip install -e .[dev]
