@@ -8,6 +8,7 @@ from ase import Atoms
 
 from cubehandler import Cube, RenderSpec
 from cubehandler.cube import ANG_TO_BOHR
+from cubehandler.cube import RenderLighting
 from cubehandler.slice_plane import SlicePlane
 
 
@@ -94,7 +95,9 @@ def test_plane_is_included_only_when_requested(monkeypatch, tmp_path):
     cube.render(spec)
     assert not any(kwargs.get("scalars") == "slice_rgb" for _, kwargs in meshes)
     meshes.clear()
-    cube.render(replace(spec, slice_plane=plane))
+    cube.render(
+        replace(spec, slice_plane=plane, lighting=RenderLighting(0.4, 0.6, 0.2))
+    )
     planes = [
         (mesh, kwargs)
         for mesh, kwargs in meshes
@@ -102,6 +105,17 @@ def test_plane_is_included_only_when_requested(monkeypatch, tmp_path):
     ]
     assert len(planes) == 1 and planes[0][0].n_cells > 0
     assert planes[0][1]["rgb"] and planes[0][1]["opacity"] == 1.0
+    assert planes[0][1]["lighting"] is False and "specular" not in planes[0][1]
+    materials = [kwargs for _, kwargs in meshes if kwargs.get("scalars") != "slice_rgb"]
+    assert materials and all(
+        item["ambient"] == 0.4 and item["specular"] == 0.06 for item in materials
+    )
+
+
+@pytest.mark.parametrize("value", [float("nan"), -1, 1.1])
+def test_invalid_lighting_is_reported(value):
+    with pytest.raises(ValueError, match="Lighting"):
+        RenderLighting(gloss=value)
 
 
 @pytest.mark.parametrize(

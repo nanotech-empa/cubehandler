@@ -28,6 +28,32 @@ _PIL_IMAGE_FORMATS = {
 
 
 @dataclass(frozen=True)
+class RenderLighting:
+    """Portable appearance controls; the data plane is always unlit."""
+
+    ambient: float = 0.45
+    direct: float = 0.55
+    gloss: float = 0.15
+
+    def __post_init__(self):
+        if any(
+            not np.isfinite(v) or not 0 <= v <= 1
+            for v in (self.ambient, self.direct, self.gloss)
+        ):
+            raise ValueError("Lighting values must be finite and between 0 and 1")
+
+    def material(self):
+        # NGL uses roughness, VTK uses a specular coefficient/exponent. These
+        # controls provide comparable appearance, not pixel-identical shading.
+        return dict(
+            ambient=self.ambient,
+            diffuse=self.direct,
+            specular=0.3 * self.gloss,
+            specular_power=5 + 95 * self.gloss,
+        )
+
+
+@dataclass(frozen=True)
 class RenderSpec:
     orientation16: tuple[float, ...]
     iso_pairs: tuple[tuple[float, str], ...]
@@ -40,6 +66,7 @@ class RenderSpec:
     atom_scale: float = 0.8
     bond_radius: float = 0.1
     slice_plane: Optional[SlicePlane] = None
+    lighting: Optional[RenderLighting] = None
 
 
 def remove_trailing_zeros(number):
@@ -315,6 +342,7 @@ class Cube:
 
         plotter = pv.Plotter(off_screen=True, window_size=(spec.width, spec.height))
         plotter.set_background(spec.background)
+        material = spec.lighting.material() if spec.lighting is not None else {}
 
         for isovalue, color in spec.iso_pairs:
             contour = structured_grid.contour(
@@ -326,14 +354,19 @@ class Cube:
                     color=color,
                     opacity=spec.surface_opacity,
                     smooth_shading=True,
+                    **material,
                 )
 
         if spec.slice_plane is not None:
             plane = spec.slice_plane.mesh(self, rotation, translation)
             if plane.n_cells:
                 plotter.add_mesh(
-                    plane, scalars="slice_rgb", rgb=True, opacity=1.0,
-                    lighting=False, show_scalar_bar=False,
+                    plane,
+                    scalars="slice_rgb",
+                    rgb=True,
+                    opacity=1.0,
+                    lighting=False,
+                    show_scalar_bar=False,
                 )
 
         transformed_atom_positions = self._transform_points(
@@ -349,7 +382,7 @@ class Cube:
                 phi_resolution=24,
             )
             atom_color = tuple(float(c) for c in ase_colors.cpk_colors[number])
-            plotter.add_mesh(sphere, color=atom_color, smooth_shading=True)
+            plotter.add_mesh(sphere, color=atom_color, smooth_shading=True, **material)
 
         bond_points, _ = self._compute_bonds(self.ase_atoms)
         if len(bond_points):
@@ -359,7 +392,7 @@ class Cube:
             for start, end in transformed_bond_points:
                 line = pv.Line(start, end)
                 tube = line.tube(radius=spec.bond_radius)
-                plotter.add_mesh(tube, color="#A0A0A0", smooth_shading=True)
+                plotter.add_mesh(tube, color="#A0A0A0", smooth_shading=True, **material)
 
         plotter.camera.position = (0.0, 0.0, -scale)
         plotter.camera.focal_point = (0.0, 0.0, 0.0)

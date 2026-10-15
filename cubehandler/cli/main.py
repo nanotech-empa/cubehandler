@@ -8,8 +8,6 @@ import typer
 import yaml
 from glob import glob
 
-from ..version import __version__
-
 from ..cube import Cube, RenderSpec, SUPPORTED_IMAGE_FORMATS
 from ..slice_plane import SlicePlane
 from ..version import __version__
@@ -149,6 +147,7 @@ def shrink(
     if verbosity >= Verbosity.INFO:
         typer.echo(yaml.dump(output, sort_keys=False))
 
+
 @app.command(help="Render a cube file.")
 def render(
     cube_file: str = typer.Argument(..., help="Path to the input cube file."),
@@ -178,8 +177,18 @@ def render(
     background: str = typer.Option("#FFFFFF", help="Background colour."),
     opacity: float = typer.Option(0.55, min=0.0, max=1.0, help="Isosurface opacity."),
     slice_plane: Optional[Path] = typer.Option(
-        None, "--slice-plane", exists=True, dir_okay=False,
+        None,
+        "--slice-plane",
+        exists=True,
+        dir_okay=False,
         help="JSON file with the visible slicing-plane settings.",
+    ),
+    lighting: Optional[Path] = typer.Option(
+        None,
+        "--lighting",
+        exists=True,
+        dir_okay=False,
+        help="JSON file with ambient, direct and gloss controls (each 0 to 1).",
     ),
 ):
     """Render a cube file with nglview-compatible camera orientation."""
@@ -228,6 +237,14 @@ def render(
         except (TypeError, ValueError) as exc:
             raise typer.BadParameter(str(exc), param_hint="--slice-plane") from exc
     cube = Cube.from_file(input_path)
+    lights = None
+    if lighting is not None:
+        from cubehandler.cube import RenderLighting
+
+        try:
+            lights = RenderLighting(**json.loads(lighting.read_text()))
+        except (TypeError, ValueError) as exc:
+            raise typer.BadParameter(str(exc), param_hint="--lighting") from exc
     render_spec = RenderSpec(
         orientation16=tuple(float(v) for v in orientation),
         iso_pairs=tuple(iso_pairs),
@@ -238,6 +255,7 @@ def render(
         background=background,
         surface_opacity=opacity,
         slice_plane=plane,
+        lighting=lights,
     )
 
     try:

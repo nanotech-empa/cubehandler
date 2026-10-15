@@ -19,6 +19,8 @@ def test_render_cli_settings(monkeypatch, tmp_path, with_plane):
 
     monkeypatch.setattr(Cube, "render", render)
     extra = []
+    lighting = tmp_path / "lighting.json"
+    lighting.write_text(json.dumps(dict(ambient=0.4, direct=0.6, gloss=0.2)))
     if with_plane:
         path = tmp_path / "plane.json"
         path.write_text(
@@ -60,6 +62,8 @@ def test_render_cli_settings(monkeypatch, tmp_path, with_plane):
             "#123456",
             "--opacity",
             ".7",
+            "--lighting",
+            str(lighting),
             *extra,
         ],
     )
@@ -72,6 +76,7 @@ def test_render_cli_settings(monkeypatch, tmp_path, with_plane):
         0.7,
     )
     assert spec.iso_pairs == ((0.03, "#2563B7"), (-0.03, "#E3AE3B"))
+    assert spec.lighting.ambient == 0.4 and spec.lighting.gloss == 0.2
     assert (spec.slice_plane is not None) == with_plane
     if with_plane:
         assert spec.slice_plane.offset == 0.2 and spec.slice_plane.periodic is False

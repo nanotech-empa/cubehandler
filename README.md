@@ -31,3 +31,10 @@ The chosen input cube supplies the values, so full-resolution rendering samples
 the full cube instead of a stored preview. Omitting `--slice-plane` keeps the
 previous isosurface-only behavior. AiiDA applications should capture this JSON
 in their render CalcJob's inputs and retrieve the resulting image and log.
+
+Use `--lighting lighting.json` for atom and isosurface lighting, for example
+`{"ambient": 0.45, "direct": 0.55, "gloss": 0.15}`. Each value lies between 0 and
+1. The plane remains unlit so its data colours are independent of illumination.
+These controls map to VTK's material coefficients; NGL previews use a different
+lighting model, so their shading is comparable rather than pixel-identical.
+Omitting `--lighting` retains the original renderer defaults.
