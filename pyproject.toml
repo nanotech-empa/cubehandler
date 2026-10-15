@@ -17,12 +17,13 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "ase",
     "pyvista>=0.46",
     "scikit-image",
     "typer",
+    "pyyaml~=6.0",
 ]
 
 [project.optional-dependencies]
@@ -37,7 +38,7 @@ dev = [
 cubehandler = 'cubehandler.cli.main:app'
 
 [tool.bumpver]
-current_version = "v0.2.0"
+current_version = "v0.2.1"
 version_pattern = "vMAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "Bump version {old_version} -> {new_version}."
 tag_message = "Release {new_version}."
