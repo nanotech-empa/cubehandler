@@ -171,6 +171,10 @@ def render(
         "-o",
         help="Output image path. Defaults to <cube_stem>_render.<format>.",
     ),
+    width: int = typer.Option(1600, min=320, max=4096, help="Image width in pixels."),
+    height: int = typer.Option(1200, min=320, max=4096, help="Image height in pixels."),
+    background: str = typer.Option("#FFFFFF", help="Background colour."),
+    opacity: float = typer.Option(0.55, min=0.0, max=1.0, help="Isosurface opacity."),
 ):
     """Render a cube file with nglview-compatible camera orientation."""
     input_path = Path(cube_file)
@@ -217,6 +221,10 @@ def render(
         iso_pairs=tuple(iso_pairs),
         image_format=normalized_format,
         output_path=output_path,
+        width=width,
+        height=height,
+        background=background,
+        surface_opacity=opacity,
     )
 
     try:
