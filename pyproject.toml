@@ -21,6 +21,8 @@ requires-python = ">=3.9"
 dependencies = [
     "ase",
     "pyvista>=0.46",
+    "scipy",
+    "matplotlib",
     "scikit-image",
     "typer",
     "pyyaml~=6.0",

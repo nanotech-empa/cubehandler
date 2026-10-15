@@ -1,13 +1,16 @@
 """The renderer CLI passes the selected output settings unchanged."""
 
 from pathlib import Path
+import json
+import pytest
 
 from typer.testing import CliRunner
 from cubehandler import Cube
 from cubehandler.cli.main import app
 
 
-def test_render_cli_settings(monkeypatch, tmp_path):
+@pytest.mark.parametrize("with_plane", [False, True])
+def test_render_cli_settings(monkeypatch, tmp_path, with_plane):
     requests = []
 
     def render(self, spec):
@@ -15,6 +18,25 @@ def test_render_cli_settings(monkeypatch, tmp_path):
         return spec.output_path
 
     monkeypatch.setattr(Cube, "render", render)
+    extra = []
+    if with_plane:
+        path = tmp_path / "plane.json"
+        path.write_text(
+            json.dumps(
+                dict(
+                    center=[0, 0, 0],
+                    normal=[0, 0, 1],
+                    offset=0.2,
+                    width=3.0,
+                    height=4.0,
+                    resolution=64,
+                    vmin=-0.1,
+                    vmax=0.1,
+                    periodic=False,
+                )
+            )
+        )
+        extra = ["--slice-plane", str(path)]
     result = CliRunner().invoke(
         app,
         [
@@ -38,6 +60,7 @@ def test_render_cli_settings(monkeypatch, tmp_path):
             "#123456",
             "--opacity",
             ".7",
+            *extra,
         ],
     )
     assert result.exit_code == 0, result.output
@@ -49,3 +72,6 @@ def test_render_cli_settings(monkeypatch, tmp_path):
         0.7,
     )
     assert spec.iso_pairs == ((0.03, "#2563B7"), (-0.03, "#E3AE3B"))
+    assert (spec.slice_plane is not None) == with_plane
+    if with_plane:
+        assert spec.slice_plane.offset == 0.2 and spec.slice_plane.periodic is False

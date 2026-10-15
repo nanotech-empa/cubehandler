@@ -1,4 +1,5 @@
 import enum
+import json
 import re
 from pathlib import Path
 from typing import Optional
@@ -10,6 +11,7 @@ from glob import glob
 from ..version import __version__
 
 from ..cube import Cube, RenderSpec, SUPPORTED_IMAGE_FORMATS
+from ..slice_plane import SlicePlane
 from ..version import __version__
 
 app = typer.Typer(help="Cubehandler: a tool to handle cube files.")
@@ -175,6 +177,10 @@ def render(
     height: int = typer.Option(1200, min=320, max=4096, help="Image height in pixels."),
     background: str = typer.Option("#FFFFFF", help="Background colour."),
     opacity: float = typer.Option(0.55, min=0.0, max=1.0, help="Isosurface opacity."),
+    slice_plane: Optional[Path] = typer.Option(
+        None, "--slice-plane", exists=True, dir_okay=False,
+        help="JSON file with the visible slicing-plane settings.",
+    ),
 ):
     """Render a cube file with nglview-compatible camera orientation."""
     input_path = Path(cube_file)
@@ -215,6 +221,12 @@ def render(
                 param_hint="--output",
             )
 
+    plane = None
+    if slice_plane is not None:
+        try:
+            plane = SlicePlane(**json.loads(slice_plane.read_text()))
+        except (TypeError, ValueError) as exc:
+            raise typer.BadParameter(str(exc), param_hint="--slice-plane") from exc
     cube = Cube.from_file(input_path)
     render_spec = RenderSpec(
         orientation16=tuple(float(v) for v in orientation),
@@ -225,6 +237,7 @@ def render(
         height=height,
         background=background,
         surface_opacity=opacity,
+        slice_plane=plane,
     )
 
     try:

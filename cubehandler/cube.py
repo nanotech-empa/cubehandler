@@ -6,11 +6,12 @@ import io
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Optional, Sequence
 
 import ase
 import numpy as np
 from skimage import transform
+from .slice_plane import SlicePlane
 
 ANG_TO_BOHR = 1.8897259886
 SUPPORTED_IMAGE_FORMATS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp", "pnm", "ps")
@@ -38,6 +39,7 @@ class RenderSpec:
     surface_opacity: float = 0.55
     atom_scale: float = 0.8
     bond_radius: float = 0.1
+    slice_plane: Optional[SlicePlane] = None
 
 
 def remove_trailing_zeros(number):
@@ -324,6 +326,14 @@ class Cube:
                     color=color,
                     opacity=spec.surface_opacity,
                     smooth_shading=True,
+                )
+
+        if spec.slice_plane is not None:
+            plane = spec.slice_plane.mesh(self, rotation, translation)
+            if plane.n_cells:
+                plotter.add_mesh(
+                    plane, scalars="slice_rgb", rgb=True, opacity=1.0,
+                    lighting=False, show_scalar_bar=False,
                 )
 
         transformed_atom_positions = self._transform_points(
