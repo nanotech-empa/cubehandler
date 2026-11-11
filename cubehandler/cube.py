@@ -275,7 +275,7 @@ class Cube:
         )
 
         # Write the cell dimensions.
-        dv_br = self.cell / data.shape
+        dv_br = self.cell / np.asarray(data.shape)[:, None]
         for i in range(3):
             f.write(
                 f"{data.shape[i]:5d} {dv_br[i][0]:12.6f} {dv_br[i][1]:12.6f} {dv_br[i][2]:12.6f}\n"
@@ -307,14 +307,23 @@ class Cube:
         slicer = np.round(
             1.0 / (points_per_angstrom * np.linalg.norm(self.dcell, axis=1))
         ).astype(int)
-        try:
-            self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
-        except ValueError:
-            print("Warning: Could not reduce data density")
+        # Each retained sample must stay at its original Cartesian position.
+        # A stride dividing the axis size preserves both the samples and cell.
+        slicer = [
+            max(
+                step
+                for step in range(1, min(max(int(target), 1), size) + 1)
+                if size % step == 0
+            )
+            for size, target in zip(self.data.shape, slicer)
+        ]
+        self.data = self.data[:: slicer[0], :: slicer[1], :: slicer[2]]
+        self.cell_n = np.asarray(self.data.shape)
 
     def reduce_data_density_skimage(self, resolution_factor=0.4):
         new_shape = tuple(int(dim * resolution_factor) for dim in self.data.shape)
         self.data = transform.resize(self.data, new_shape, anti_aliasing=True)
+        self.cell_n = np.asarray(self.data.shape)
 
     def render(self, spec: RenderSpec) -> Path:
         """Render a cube file using a camera orientation from nglview."""
@@ -619,7 +628,7 @@ class Cube:
     @property
     def dcell_au(self):
         """in [au]"""
-        return self.cell / self.cell_n
+        return self.cell / np.asarray(self.cell_n)[:, None]
 
     @property
     def x_arr_au(self):
