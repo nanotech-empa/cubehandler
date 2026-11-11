@@ -338,15 +338,49 @@ def run(yaml_file: Path = typer.Argument(..., exists=True, readable=True)):
     with open(yaml_file, "r") as f:
         config = yaml.safe_load(f)
 
+    from typer.main import get_command
+
+    commands = get_command(app).commands
     for step in config.get("steps", []):
         command = step.get("command")
+        if command not in commands:
+            raise typer.BadParameter(f"Unknown operation: {command}")
+        options = {
+            option: parameter
+            for parameter in commands[command].params
+            for option in getattr(parameter, "opts", ())
+        }
         all_tokens = [command]
-        options = [
-            (f"--{k.replace('_', '-')}", v) for k, v in step.get("options", {}).items()
-        ]
-        all_tokens += [str(item) for opt in options for item in opt if item is not None]
-        all_tokens += ["--"]  # to separate options from arguments
+        for key, value in step.get("options", {}).items():
+            if value is None:
+                continue
+            flag = f"--{key.replace('_', '-')}"
+            parameter = options.get(flag)
+            if parameter is not None and parameter.is_flag:
+                if value:
+                    all_tokens.append(flag)
+                elif parameter.secondary_opts:
+                    all_tokens.append(parameter.secondary_opts[0])
+            elif parameter is not None and parameter.multiple:
+                values = value if isinstance(value, (list, tuple)) else [value]
+                for item in values:
+                    all_tokens.extend([flag, str(item)])
+            elif parameter is not None and parameter.nargs > 1:
+                if (
+                    not isinstance(value, (list, tuple))
+                    or len(value) != parameter.nargs
+                ):
+                    raise typer.BadParameter(
+                        f"{flag} requires {parameter.nargs} values"
+                    )
+                all_tokens.extend([flag, *map(str, value)])
+            else:
+                all_tokens.extend([flag, str(value)])
+        all_tokens += ["--"]
         all_tokens += [str(arg) for arg in step.get("args", [])]
         print("Running command:", " ".join(all_tokens))
         result = runner.invoke(app, all_tokens)
         typer.echo(result.stdout)
+        if result.exit_code:
+            typer.echo(result.output, err=True)
+            raise typer.Exit(code=result.exit_code)
