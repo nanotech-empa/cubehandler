@@ -7,6 +7,12 @@ image dimensions, background and opacity. Run `cubehandler render --help` for th
 complete interface. Headless rendering requires working EGL or OSMesa on the
 execution node.
 
+Export the orientation from NGL's default perspective camera (40° vertical
+field of view). The scene is translated to its camera center before rotation,
+keeping structures away from the coordinate origin correctly framed. Output
+width and height set the image aspect ratio. A custom field of view or
+orthographic projection needs information beyond the orientation matrix.
+
 Use `--slice-plane plane.json` to include a visible, coloured plane in the 3D
 render. Example JSON (coordinates and lengths in angstrom):
 
