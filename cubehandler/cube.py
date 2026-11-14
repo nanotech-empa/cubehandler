@@ -406,6 +406,7 @@ class Cube:
         plotter.camera.position = (0.0, 0.0, -scale)
         plotter.camera.focal_point = (0.0, 0.0, 0.0)
         plotter.camera.up = (0.0, 1.0, 0.0)
+        plotter.camera.view_angle = 40.0  # Default NGL perspective field of view.
         image_array = plotter.screenshot(return_img=True)
         plotter.close()
 
@@ -456,7 +457,10 @@ class Cube:
 
         if not np.all(np.isfinite(rotation)):
             raise ValueError("Camera orientation produced non-finite rotation values.")
-        return rotation, translation, scale
+        # NGL stores the position of its translation group *inside* the
+        # rotation group. Convert that position to the affine shift expected
+        # by all renderer geometry: R @ (point + position).
+        return rotation, rotation @ translation, scale
 
     def _build_structured_grid(
         self,
